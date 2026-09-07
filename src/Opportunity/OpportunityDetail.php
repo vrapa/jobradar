@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Opportunity;
 
+use App\Decision\DecisionStateView;
+
 final readonly class OpportunityDetail
 {
     /**
@@ -30,6 +32,7 @@ final readonly class OpportunityDetail
         public int $lockVersion,
         public ?OpportunityTermsView $terms,
         public array $technologies,
+        public DecisionStateView $decisionState,
     ) {
     }
 }

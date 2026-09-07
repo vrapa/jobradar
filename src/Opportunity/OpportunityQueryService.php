@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Opportunity;
 
+use App\Decision\DecisionStateView;
+use App\Decision\OpportunityDecision;
 use Nette\Database\Connection;
 use Nette\Database\Row;
 
@@ -14,16 +16,22 @@ final class OpportunityQueryService
     }
 
     /** @return list<OpportunitySummary> */
-    public function listCurrent(): array
+    public function listCurrent(?int $userId = null): array
     {
         $rows = $this->database->fetchAll(
             'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
-                    v.original_title, v.translated_title, v.summary, v.incomplete
+                    v.original_title, v.translated_title, v.summary, v.incomplete,
+                    COALESCE(state.decision, ?) AS decision
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
-             WHERE o.archived_at IS NULL
+             LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
+             WHERE o.archived_at IS NULL AND COALESCE(state.decision, ?) <> ?
              ORDER BY o.found_at DESC, o.id DESC',
+            OpportunityDecision::Undecided->value,
+            $userId,
+            OpportunityDecision::Undecided->value,
+            OpportunityDecision::Uninteresting->value,
         );
 
         return array_map(
@@ -35,22 +43,29 @@ final class OpportunityQueryService
                 validityStatus: (string) $row['validity_status'],
                 incomplete: (bool) $row['incomplete'],
                 foundAt: self::dateTime($row['found_at']),
+                decision: OpportunityDecision::from((string) $row['decision']),
             ),
             $rows,
         );
     }
 
-    public function getDetail(int $id): ?OpportunityDetail
+    public function getDetail(int $id, ?int $userId = null): ?OpportunityDetail
     {
         $row = $this->database->fetch(
             'SELECT o.id, o.canonical_url, o.validity_status, o.found_at, o.current_source_version_id, o.lock_version, c.name AS company_name,
                     v.original_title, v.translated_title, v.original_text, v.translated_text,
                     v.summary, v.source_language, v.incomplete, v.acquired_at,
+                    COALESCE(state.decision, ?) AS user_decision, state.decision_reason, state.decision_note,
+                    COALESCE(state.workflow_status, ?) AS workflow_status, COALESCE(state.lock_version, 0) AS state_lock_version,
                     (SELECT COUNT(*) FROM source_versions versions WHERE versions.opportunity_id = o.id) AS version_count
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
+             LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
              WHERE o.id = ? AND o.archived_at IS NULL',
+            OpportunityDecision::Undecided->value,
+            'none',
+            $userId,
             $id,
         );
         if (!$row instanceof Row) {
@@ -83,6 +98,13 @@ final class OpportunityQueryService
             lockVersion: (int) $row['lock_version'],
             terms: $terms,
             technologies: $technologies,
+            decisionState: new DecisionStateView(
+                decision: OpportunityDecision::from((string) $row['user_decision']),
+                reason: self::nullableString($row['decision_reason']),
+                note: self::nullableString($row['decision_note']),
+                workflowStatus: (string) $row['workflow_status'],
+                lockVersion: (int) $row['state_lock_version'],
+            ),
         );
     }
 

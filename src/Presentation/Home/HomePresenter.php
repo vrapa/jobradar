@@ -16,7 +16,7 @@ final class HomePresenter extends SecuredPresenter
 
     public function renderDefault(): void
     {
-        $items = $this->opportunities->listCurrent();
+        $items = $this->opportunities->listCurrent((int) $this->getUser()->getId());
         $this->template->setParameters([
             'opportunities' => $items,
             'opportunityCount' => count($items),

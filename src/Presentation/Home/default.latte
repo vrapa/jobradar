@@ -32,6 +32,7 @@
                 <div class="d-flex gap-2 mb-2">
                     <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
                     <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplné</span>
+                    <span n:if="$opportunity->decision->value === 'react'" class="badge text-bg-success">K reakci</span>
                 </div>
                 <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id" class="stretched-link text-decoration-none">{$opportunity->title}</a></h2>
                 <p class="text-body-secondary mb-3">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>

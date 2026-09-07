@@ -21,6 +21,36 @@
     </div>
 </header>
 
+<section class="card shadow-sm mb-4 border-primary-subtle" aria-labelledby="decision-title">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 id="decision-title" class="h5 mb-0">Moje rozhodnutí</h2>
+            <span class="badge {if $opportunity->decisionState->decision->value === 'react'}text-bg-success{elseif $opportunity->decisionState->decision->value === 'uninteresting'}text-bg-secondary{else}text-bg-light border{/if}">
+                {if $opportunity->decisionState->decision->value === 'react'}K reakci{elseif $opportunity->decisionState->decision->value === 'uninteresting'}Nezajímavé{else}Nerozhodnuto{/if}
+            </span>
+        </div>
+        <p class="small text-body-secondary">„Reagovat“ nabídku pouze zařadí do interní fronty. Nic neodešle a nepředá žádné osobní údaje.</p>
+        {form decisionForm}
+            <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-lg-4">
+                    <label n:name="reason" class="form-label">Důvod pro „Nezajímavé“</label>
+                    <select n:name="reason" class="form-select"></select>
+                </div>
+                <div class="col-12 col-lg-8">
+                    <label n:name="note" class="form-label">Soukromá poznámka <span class="text-body-secondary">(volitelné)</span></label>
+                    <textarea n:name="note" class="form-control"></textarea>
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2">
+                    <button n:name="react" class="btn btn-success">Reagovat</button>
+                    <button n:name="uninteresting" class="btn btn-outline-secondary">Nezajímavé</button>
+                    <button n:if="$opportunity->decisionState->decision->value !== 'undecided'" n:name="undo" class="btn btn-link">Zpět na nerozhodnuto</button>
+                </div>
+            </div>
+        {/form}
+    </div>
+</section>
+
 <section class="card shadow-sm mb-4">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center gap-3 mb-3">

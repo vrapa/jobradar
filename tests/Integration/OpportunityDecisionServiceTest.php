@@ -10,6 +10,7 @@ use App\Decision\OpportunityDecisionService;
 use App\Opportunity\OpportunityConflictException;
 use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
+use App\Opportunity\OpportunityQueryService;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 
@@ -24,6 +25,7 @@ final class OpportunityDecisionServiceTest extends TestCase
         $database = $container->getByType(Connection::class);
         $imports = $container->getByType(OpportunityImportService::class);
         $service = $container->getByType(OpportunityDecisionService::class);
+        $queries = $container->getByType(OpportunityQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = null;
         $opportunityId = null;
@@ -51,6 +53,7 @@ final class OpportunityDecisionServiceTest extends TestCase
             self::assertSame(OpportunityDecision::Undecided, $react->previousDecision);
             self::assertSame(1, $react->lockVersion);
             self::assertTrue($react->changed);
+            self::assertTrue($this->listContains($queries, $userId, $opportunityId));
             self::assertSame('none', $database->fetchField(
                 'SELECT workflow_status FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
                 $userId,
@@ -69,8 +72,10 @@ final class OpportunityDecisionServiceTest extends TestCase
                 'Syntetická poznámka.',
             );
             self::assertSame(2, $hidden->lockVersion);
+            self::assertFalse($this->listContains($queries, $userId, $opportunityId));
             $undo = $service->setManualDecision($userId, $opportunityId, 2, OpportunityDecision::Undecided);
             self::assertSame(3, $undo->lockVersion);
+            self::assertTrue($this->listContains($queries, $userId, $opportunityId));
             self::assertSame(3, (int) $database->fetchField(
                 'SELECT COUNT(*) FROM opportunity_decision_history WHERE user_id = ? AND opportunity_id = ?',
                 $userId,
@@ -102,5 +107,13 @@ final class OpportunityDecisionServiceTest extends TestCase
                 $database->query('DELETE FROM users WHERE id = ?', $userId);
             }
         }
+    }
+
+    private function listContains(OpportunityQueryService $queries, int $userId, int $opportunityId): bool
+    {
+        return array_any(
+            $queries->listCurrent($userId),
+            static fn ($item): bool => $item->id === $opportunityId,
+        );
     }
 }

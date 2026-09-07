@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Opportunity;
 
+use App\Decision\OpportunityDecision;
+
 final readonly class OpportunitySummary
 {
     public function __construct(
@@ -14,6 +16,7 @@ final readonly class OpportunitySummary
         public string $validityStatus,
         public bool $incomplete,
         public \DateTimeInterface $foundAt,
+        public OpportunityDecision $decision,
     ) {
     }
 }
