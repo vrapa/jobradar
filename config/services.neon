@@ -47,6 +47,7 @@ services:
 	- App\Api\V1\RenewRunnerLeaseHandler
 	- App\Api\V1\RecordSourceProgressHandler
 	- App\Api\V1\OpportunityTransformer
+	- App\Api\V1\AssessmentTransformer
 	- App\Api\V1\ListOpportunitiesHandler
 	- App\Api\V1\GetOpportunityHandler
 	- App\Api\V1\ImportOpportunityHandler

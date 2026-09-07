@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Api\Auth\ApiIdentity;
 use App\Api\Auth\ApiRequestContext;
 use App\Api\V1\SaveOpportunityAssessmentHandler;
+use App\Api\V1\GetOpportunityHandler;
 use App\Bootstrap;
 use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
@@ -26,6 +27,7 @@ final class AssessmentApiHandlerTest extends TestCase
         $imports = $container->getByType(OpportunityImportService::class);
         $context = $container->getByType(ApiRequestContext::class);
         $handler = $container->getByType(SaveOpportunityAssessmentHandler::class);
+        $getOpportunity = $container->getByType(GetOpportunityHandler::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $profileId = $ruleSetId = $opportunityId = null;
         $clientIdentifier = 'synthetic-assessment-client-' . $unique;
@@ -83,6 +85,10 @@ final class AssessmentApiHandlerTest extends TestCase
                 $userId,
                 $opportunityId,
             ));
+            $detail = self::payload(self::json($getOpportunity->handle(['id' => $opportunityId])));
+            self::assertSame('verify', $detail['data']['current_assessment']['recommendation']);
+            self::assertSame('synthetic-model', $detail['data']['current_assessment']['model_identifier']);
+            self::assertSame('high', $detail['data']['current_assessment']['findings'][0]['severity']);
 
             $replayed = self::json($handler->handle(['id' => $opportunityId, 'body' => $body]));
             self::assertSame(201, $replayed->getCode());

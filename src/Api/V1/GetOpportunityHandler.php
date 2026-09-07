@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Api\V1;
 
 use App\Api\Auth\ApiRequestContext;
+use App\Assessment\AssessmentQueryService;
 use App\Opportunity\OpportunityQueryService;
 use Tomaj\NetteApi\Handlers\BaseHandler;
 use Tomaj\NetteApi\Params\GetInputParam;
@@ -18,6 +19,8 @@ final class GetOpportunityHandler extends BaseHandler
         private readonly ApiRequestContext $requestContext,
         private readonly OpportunityQueryService $opportunities,
         private readonly OpportunityTransformer $transformer,
+        private readonly AssessmentQueryService $assessments,
+        private readonly AssessmentTransformer $assessmentTransformer,
     ) {
         parent::__construct();
     }
@@ -43,6 +46,9 @@ final class GetOpportunityHandler extends BaseHandler
         if ($opportunity === null) {
             return new JsonApiResponse(404, ['error' => ['code' => 'opportunity_not_found', 'message' => 'Nabídka nebyla nalezena.']]);
         }
-        return new JsonApiResponse(200, ['data' => $this->transformer->transformDetail($opportunity)]);
+        $data = $this->transformer->transformDetail($opportunity);
+        $assessment = $this->assessments->getCurrent($id);
+        $data['current_assessment'] = $assessment === null ? null : $this->assessmentTransformer->transform($assessment);
+        return new JsonApiResponse(200, ['data' => $data]);
     }
 }
