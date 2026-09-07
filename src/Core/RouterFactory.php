@@ -32,6 +32,13 @@ final class RouterFactory
         ];
         $router->addRoute('api/v1/search-requests/<id \d+>/<apiAction resume|cancel>', $apiControl);
         $router->addRoute('api/v1/search-requests/<id \d+>', $apiDetail);
+        $router->addRoute('api/v1/runner/lease/renew', [
+            'presenter' => 'Api:Api',
+            'action' => 'default',
+            'version' => '1',
+            'package' => 'runner',
+            'apiAction' => 'renew-lease',
+        ]);
         $router->addRoute('api/v<version>/<package>[/<apiAction>]', 'Api:Api:default');
         $router->addRoute('prihlaseni', 'Sign:in');
         $router->addRoute('zdroje', 'Source:default');

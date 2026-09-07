@@ -40,6 +40,8 @@ services:
 	- App\Api\V1\GetSearchRequestHandler
 	- App\Api\V1\ResumeSearchRequestHandler
 	- App\Api\V1\CancelSearchRequestHandler
+	- App\Api\V1\ClaimRunnerLeaseHandler
+	- App\Api\V1\RenewRunnerLeaseHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
 	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
@@ -55,6 +57,10 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'search:control'
+	runnerWriteApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'search:write'
 	apiDecider:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
@@ -63,3 +69,5 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'search-requests', 'detail'), 'App\Api\V1\GetSearchRequestHandler', @searchControlApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-requests', 'resume'), 'App\Api\V1\ResumeSearchRequestHandler', @searchControlApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-requests', 'cancel'), 'App\Api\V1\CancelSearchRequestHandler', @searchControlApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'lease'), 'App\Api\V1\ClaimRunnerLeaseHandler', @runnerWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'renew-lease'), 'App\Api\V1\RenewRunnerLeaseHandler', @runnerWriteApiAuthorization)
