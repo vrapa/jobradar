@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 
 final class JobRadarMcpToolsTest extends TestCase
 {
-    public function testReactionQueueIsReadOnlyProjectionAndDecisionUsesVersionedApi(): void
+    public function testReactionQueueAndDelegatedDecisionsUseVersionedApi(): void
     {
         $http = new McpRecordingHttpClient([
             new RunnerHttpResponse(200, ['data' => [
@@ -21,7 +21,19 @@ final class JobRadarMcpToolsTest extends TestCase
                 ['id' => 3, 'decision' => 'uninteresting'],
             ], 'meta' => ['count' => 3]]),
             new RunnerHttpResponse(200, ['data' => [
+                'id' => 7,
+                'status' => 'active',
+                'application_submitted' => false,
+            ]]),
+            new RunnerHttpResponse(200, ['data' => [
+                'delegation_id' => 7,
+                'processed' => 2,
+                'changed' => 2,
+                'application_submitted' => false,
+            ]]),
+            new RunnerHttpResponse(200, ['data' => [
                 'opportunity_id' => 2,
+                'delegation_id' => 8,
                 'decision' => 'react',
                 'lock_version' => 1,
                 'application_submitted' => false,
@@ -38,17 +50,45 @@ final class JobRadarMcpToolsTest extends TestCase
         self::assertSame(1, $queue->structuredContent['meta']['count']);
         self::assertSame(2, $queue->structuredContent['data'][0]['id']);
 
+        $created = $tools->createDecisionDelegation([
+            'opportunity_ids' => [2, 3],
+            'candidate_profile_id' => 4,
+            'scoring_rule_set_id' => 5,
+            'expires_at' => '2030-01-01T12:00:00+00:00',
+            'idempotency_key' => 'synthetic-create-delegation',
+        ]);
+        self::assertIsArray($created->structuredContent);
+        self::assertSame(7, $created->structuredContent['data']['id']);
+
+        $batch = $tools->setDecisionsBatch(7, [
+            'decisions' => [
+                ['opportunity_id' => 2, 'expected_lock_version' => 0, 'decision' => 'react'],
+                ['opportunity_id' => 3, 'expected_lock_version' => 1, 'decision' => 'uninteresting', 'reason' => 'low_rate'],
+            ],
+            'idempotency_key' => 'synthetic-decision-batch',
+        ]);
+        self::assertIsArray($batch->structuredContent);
+        self::assertSame(2, $batch->structuredContent['data']['processed']);
+
         $decision = $tools->setDecision(2, [
+            'delegation_id' => 8,
             'expected_lock_version' => 0,
             'decision' => 'react',
             'idempotency_key' => 'synthetic-decision-key',
         ]);
         self::assertIsArray($decision->structuredContent);
         self::assertFalse($decision->structuredContent['data']['application_submitted']);
-        self::assertSame(['GET /api/v1/opportunities', 'PUT /api/v1/opportunities/2/decision'], $http->requests);
+        self::assertSame([
+            'GET /api/v1/opportunities',
+            'POST /api/v1/decision-delegations',
+            'POST /api/v1/decision-delegations/7/decisions',
+            'PUT /api/v1/opportunities/2/decision',
+        ], $http->requests);
         self::assertSame('Authorization: Bearer jr_mcp_secret', $http->headers[0][0]);
-        self::assertIsArray($http->bodies[1]);
-        self::assertSame('react', $http->bodies[1]['decision']);
+        self::assertIsArray($http->bodies[2]);
+        self::assertSame(2, count($http->bodies[2]['decisions']));
+        self::assertIsArray($http->bodies[3]);
+        self::assertSame(8, $http->bodies[3]['delegation_id']);
     }
 
     public function testApiErrorDoesNotExposeRemoteTextOrToken(): void

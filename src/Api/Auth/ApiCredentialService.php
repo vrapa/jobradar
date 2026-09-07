@@ -20,6 +20,7 @@ final class ApiCredentialService
         'opportunities:import',
         'assessments:write',
         'decisions:recommend',
+        'decisions:delegate',
         'decisions:write',
         'applications:write',
         'audit:read',

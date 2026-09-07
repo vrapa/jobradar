@@ -34,7 +34,9 @@ final class JobRadarMcpServerFactory
             ->addTool([$tools, 'getOpportunity'], 'get_opportunity', description: 'Read an opportunity, its versions, terms, current assessment, and decision state.', annotations: $readOnly)
             ->addTool([$tools, 'importOpportunityVersion'], 'import_opportunity_version', description: 'Idempotently import untrusted offer content without changing a decision.', annotations: $safeWrite, inputSchema: self::wrappedObjectSchema('opportunity', self::opportunitySchema()))
             ->addTool([$tools, 'saveAssessment'], 'save_assessment', description: 'Save an explainable assessment and recommendation; never changes the user decision or submits.', annotations: $safeWrite, inputSchema: self::targetAndObjectSchema('assessment', self::assessmentSchema()))
-            ->addTool([$tools, 'setDecision'], 'set_decision', description: 'Set a reversible decision with optimistic locking. React only queues preparation and never submits.', annotations: $safeWrite, inputSchema: self::targetAndObjectSchema('decision', self::decisionSchema()))
+            ->addTool([$tools, 'createDecisionDelegation'], 'create_decision_delegation', description: 'Create a time-limited delegation over an exact assessed opportunity list. Use only after an explicit user instruction; requires the separate decisions:delegate scope and never submits.', annotations: $safeWrite, inputSchema: self::wrappedObjectSchema('delegation', self::delegationSchema()))
+            ->addTool([$tools, 'setDecision'], 'set_decision', description: 'Apply one reversible decision under an active single-opportunity delegation. React only queues preparation and never submits.', annotations: $safeWrite, inputSchema: self::targetAndObjectSchema('decision', self::decisionSchema()))
+            ->addTool([$tools, 'setDecisionsBatch'], 'set_decisions_batch', description: 'Atomically apply the complete explicitly delegated batch. Any stale manual state rejects every item; React never submits.', annotations: $safeWrite, inputSchema: self::delegationAndObjectSchema('batch', self::decisionBatchSchema()))
             ->build();
     }
 
@@ -78,6 +80,23 @@ final class JobRadarMcpServerFactory
             'required' => ['opportunityId', $name],
             'properties' => [
                 'opportunityId' => ['type' => 'integer', 'minimum' => 1],
+                $name => $objectSchema,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $objectSchema
+     * @return array<string, mixed>
+     */
+    private static function delegationAndObjectSchema(string $name, array $objectSchema): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['delegationId', $name],
+            'properties' => [
+                'delegationId' => ['type' => 'integer', 'minimum' => 1],
                 $name => $objectSchema,
             ],
         ];
@@ -139,12 +158,68 @@ final class JobRadarMcpServerFactory
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['expected_lock_version', 'decision', 'idempotency_key'],
+            'required' => ['delegation_id', 'expected_lock_version', 'decision', 'idempotency_key'],
             'properties' => [
+                'delegation_id' => ['type' => 'integer', 'minimum' => 1],
                 'expected_lock_version' => ['type' => 'integer', 'minimum' => 0],
                 'decision' => ['type' => 'string', 'enum' => ['undecided', 'react', 'uninteresting']],
                 'reason' => ['type' => ['string', 'null']],
                 'note' => ['type' => ['string', 'null']],
+                'idempotency_key' => ['type' => 'string', 'minLength' => 16, 'maxLength' => 200],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function delegationSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => [
+                'opportunity_ids', 'candidate_profile_id', 'scoring_rule_set_id', 'expires_at', 'idempotency_key',
+            ],
+            'properties' => [
+                'opportunity_ids' => [
+                    'type' => 'array',
+                    'minItems' => 1,
+                    'maxItems' => 500,
+                    'uniqueItems' => true,
+                    'items' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                'candidate_profile_id' => ['type' => 'integer', 'minimum' => 1],
+                'scoring_rule_set_id' => ['type' => 'integer', 'minimum' => 1],
+                'expires_at' => ['type' => 'string', 'format' => 'date-time'],
+                'idempotency_key' => ['type' => 'string', 'minLength' => 16, 'maxLength' => 200],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function decisionBatchSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['decisions', 'idempotency_key'],
+            'properties' => [
+                'decisions' => [
+                    'type' => 'array',
+                    'minItems' => 1,
+                    'maxItems' => 500,
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['opportunity_id', 'expected_lock_version', 'decision'],
+                        'properties' => [
+                            'opportunity_id' => ['type' => 'integer', 'minimum' => 1],
+                            'expected_lock_version' => ['type' => 'integer', 'minimum' => 0],
+                            'decision' => ['type' => 'string', 'enum' => ['undecided', 'react', 'uninteresting']],
+                            'reason' => ['type' => ['string', 'null']],
+                            'note' => ['type' => ['string', 'null']],
+                        ],
+                    ],
+                ],
                 'idempotency_key' => ['type' => 'string', 'minLength' => 16, 'maxLength' => 200],
             ],
         ];

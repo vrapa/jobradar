@@ -95,6 +95,21 @@ final class JobRadarMcpTools
         ));
     }
 
+    /** @param array<string, mixed> $delegation */
+    public function createDecisionDelegation(array $delegation): CallToolResult
+    {
+        return self::result($this->api->post('/decision-delegations', $delegation));
+    }
+
+    /** @param array<string, mixed> $batch */
+    public function setDecisionsBatch(int $delegationId, array $batch): CallToolResult
+    {
+        return self::result($this->api->post(
+            sprintf('/decision-delegations/%d/decisions', $delegationId),
+            $batch,
+        ));
+    }
+
     /** @param array<string, mixed> $payload */
     private static function result(array $payload): CallToolResult
     {

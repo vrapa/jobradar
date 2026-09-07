@@ -38,14 +38,15 @@ final class ApiCredentialServiceTest extends TestCase
             $issue = $credentials->issueToken(
                 $userId,
                 $clientId,
-                ['opportunities:read', 'sources:read', 'sources:read'],
+                ['opportunities:read', 'sources:read', 'sources:read', 'decisions:write'],
                 $now->modify('+1 hour'),
             );
             $tokenId = $issue->id;
 
             self::assertStringStartsWith('jr_', $issue->token);
             self::assertSame(substr($issue->token, 0, 12), $issue->prefix);
-            self::assertSame(['opportunities:read', 'sources:read'], $issue->scopes);
+            self::assertSame(['decisions:write', 'opportunities:read', 'sources:read'], $issue->scopes);
+            self::assertContains('decisions:delegate', $credentials->supportedScopes());
             self::assertSame(hash('sha256', $issue->token), $database->fetchField(
                 'SELECT token_hash FROM api_access_tokens WHERE id = ?',
                 $tokenId,
@@ -82,6 +83,12 @@ final class ApiCredentialServiceTest extends TestCase
             try {
                 $credentials->authenticate($issue->token, 'search:control');
                 self::fail('Token bez požadovaného scope nesmí být přijat.');
+            } catch (ApiAuthenticationException $exception) {
+                self::assertSame('API token nemá požadované oprávnění.', $exception->getMessage());
+            }
+            try {
+                $credentials->authenticate($issue->token, 'decisions:delegate');
+                self::fail('Rozhodovací token si nesmí sám vytvořit delegaci.');
             } catch (ApiAuthenticationException $exception) {
                 self::assertSame('API token nemá požadované oprávnění.', $exception->getMessage());
             }
