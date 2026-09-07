@@ -11,6 +11,8 @@ use App\Console\ImportAssessmentCommand;
 use App\Console\MigrateCommand;
 use App\Console\CreateApiClientCommand;
 use App\Console\RunWorkerOnceCommand;
+use App\Console\BackupDatabaseCommand;
+use App\Console\RestoreDatabaseCommand;
 use Symfony\Component\Console\Application;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -18,6 +20,8 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 $container = (new Bootstrap(dirname(__DIR__)))->bootConsole();
 $application = new Application('JobRadar', '0.1.0-dev');
 $application->add($container->getByType(MigrateCommand::class));
+$application->add($container->getByType(BackupDatabaseCommand::class));
+$application->add($container->getByType(RestoreDatabaseCommand::class));
 $application->add($container->getByType(CreateAdminCommand::class));
 $application->add($container->getByType(ImportOpportunitiesCommand::class));
 $application->add($container->getByType(ImportAssessmentConfigurationCommand::class));

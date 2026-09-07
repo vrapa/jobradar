@@ -12,3 +12,5 @@
 !/var/log/.gitignore
 !/var/temp/
 !/var/temp/.gitignore
+!/var/backups/
+!/var/backups/.gitignore

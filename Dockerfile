@@ -1,7 +1,7 @@
 FROM php:8.4-apache AS php-runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl git unzip \
+    && apt-get install -y --no-install-recommends curl default-mysql-client git unzip \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
@@ -35,7 +35,7 @@ COPY --from=dependencies /app/vendor ./vendor
 COPY --from=frontend /app/public/assets ./public/assets
 COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
 
-RUN mkdir -p var/log var/temp \
+RUN mkdir -p var/backups var/log var/temp \
     && chown -R www-data:www-data var
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 \

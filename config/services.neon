@@ -9,6 +9,16 @@ services:
 		arguments:
 			migrationDirectory: %appDir%/../migrations
 	- App\Console\MigrateCommand
+	databaseTransfer:
+		factory: App\Infrastructure\DatabaseTransferService
+		arguments:
+			host: %database.host%
+			port: %database.port%
+			databaseName: %database.name%
+			user: %database.user%
+			password: %database.password%
+	- App\Console\BackupDatabaseCommand
+	- App\Console\RestoreDatabaseCommand
 	- App\Console\CreateAdminCommand
 	- App\Console\ImportOpportunitiesCommand
 	- App\Console\ImportAssessmentConfigurationCommand
