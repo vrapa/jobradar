@@ -81,7 +81,7 @@ final class SearchRunService
                 'login_required' => $result->status === 'waiting_for_login',
             ], 'WHERE id = ?', $runSource['id']);
             $this->updateAccessState($sourceId, (int) $request['runner_device_id'], $result, $now);
-            $this->advanceRequest($requestId, (int) $runSource['search_run_id'], $result->status, $now);
+            $this->advanceRequest($requestId, (int) $runSource['search_run_id'], $now);
             $this->auditLogger->record('search.source_finished', null, [
                 'search_request_id' => $requestId,
                 'search_run_id' => (int) $runSource['search_run_id'],
@@ -171,9 +171,13 @@ final class SearchRunService
         );
     }
 
-    private function advanceRequest(int $requestId, int $runId, string $lastStatus, \DateTimeImmutable $now): void
+    private function advanceRequest(int $requestId, int $runId, \DateTimeImmutable $now): void
     {
-        if ($lastStatus === 'waiting_for_login') {
+        $waitingForLogin = (int) $this->database->fetchField(
+            "SELECT COUNT(*) FROM search_run_sources WHERE search_run_id = ? AND source_status = 'waiting_for_login'",
+            $runId,
+        );
+        if ($waitingForLogin > 0) {
             $this->database->query('UPDATE search_requests SET request_status = ? WHERE id = ?', 'waiting_for_login', $requestId);
             return;
         }

@@ -84,7 +84,9 @@ final class RunnerLeaseService
             $sourceIds = array_map(
                 static fn (Row $row): int => (int) $row['source_id'],
                 $this->database->fetchAll(
-                    'SELECT source_id FROM search_run_sources WHERE search_run_id = ? ORDER BY source_id',
+                    "SELECT source_id FROM search_run_sources
+                     WHERE search_run_id = ? AND source_status IN ('planned', 'waiting_for_login')
+                     ORDER BY source_id",
                     $runId,
                 ),
             );

@@ -33,7 +33,7 @@ final class SearchRequestControlServiceTest extends TestCase
         $queries = $container->getByType(SourceQueryService::class);
         $loginSourcesHandler = $container->getByType(LoginRequiredSourcesHandler::class);
         $unique = bin2hex(random_bytes(8));
-        $userId = $sourceId = $deviceId = $requestId = $runId = null;
+        $userId = $sourceId = $secondSourceId = $deviceId = $requestId = $runId = null;
 
         try {
             $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
@@ -50,13 +50,20 @@ final class SearchRequestControlServiceTest extends TestCase
                 'adapter_capabilities' => '{}', 'created_at' => $now, 'updated_at' => $now,
             ]);
             $sourceId = (int) $database->getInsertId();
+            $database->query('INSERT INTO sources', [
+                'name' => 'Synthetic public source ' . $unique, 'url' => 'https://public-source.example.test/' . $unique,
+                'market_code' => null, 'source_type' => 'public_api', 'priority' => 'A',
+                'recommended_frequency_hours' => null, 'active' => true, 'access_requirement' => 'public',
+                'adapter_capabilities' => '{}', 'created_at' => $now, 'updated_at' => $now,
+            ]);
+            $secondSourceId = (int) $database->getInsertId();
             $database->query('INSERT INTO runner_devices', [
                 'public_identifier' => '10000000-0000-4000-8000-' . substr($unique . str_repeat('0', 12), 0, 12),
                 'name' => 'Synthetic control runner', 'runner_version' => 'test', 'device_status' => 'offline',
                 'created_at' => $now,
             ]);
             $deviceId = (int) $database->getInsertId();
-            $requestId = $requests->request($userId, [$sourceId], 'runner-control-test-' . $unique)->requestId;
+            $requestId = $requests->request($userId, [$sourceId, $secondSourceId], 'runner-control-test-' . $unique)->requestId;
             $lease = $leases->claimNext($deviceId);
             self::assertNotNull($lease);
             $runId = $lease->runId;
@@ -72,7 +79,7 @@ final class SearchRequestControlServiceTest extends TestCase
             self::assertNotNull($waitingDetail);
             self::assertTrue($waitingDetail->canResume());
             self::assertSame(0, $waitingDetail->checkedSourceCount());
-            self::assertCount(1, $waitingDetail->sources);
+            self::assertCount(2, $waitingDetail->sources);
             self::assertSame('Přihlášený seznam nabídek.', $waitingDetail->sources[0]->queryText);
             self::assertTrue($waitingDetail->sources[0]->loginRequired);
             self::assertNull($waitingDetail->sources[0]->pagesTraversed);
@@ -82,12 +89,25 @@ final class SearchRequestControlServiceTest extends TestCase
             $loginPayload = $loginResponse->getPayload();
             self::assertIsArray($loginPayload);
             self::assertContains($sourceId, array_column($loginPayload['data'], 'id'));
+
+            $runs->startSource($requestId, $lease->token, $secondSourceId, new SourceRunScope('Jedna stránka veřejného API.'));
+            $runs->finishSource(
+                $requestId,
+                $lease->token,
+                $secondSourceId,
+                new SourceRunResult('complete', 1, 0, 0, 0, 0, 0, 0),
+            );
+            self::assertSame('waiting_for_login', $database->fetchField(
+                'SELECT request_status FROM search_requests WHERE id = ?',
+                $requestId,
+            ));
             self::assertSame('resume_requested', $controls->requestResume($userId, $requestId));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
 
             $resumedLease = $leases->claimNext($deviceId);
             self::assertNotNull($resumedLease);
             self::assertSame($runId, $resumedLease->runId);
+            self::assertSame([$sourceId], $resumedLease->sourceIds);
             $runs->startSource($requestId, $resumedLease->token, $sourceId, new SourceRunScope('Přihlášený seznam po zásahu uživatele.'));
             self::assertSame('cancelled', $controls->cancel($userId, $requestId));
             self::assertSame('cancelled', $controls->cancel($userId, $requestId));
@@ -122,6 +142,10 @@ final class SearchRequestControlServiceTest extends TestCase
             if ($sourceId !== null) {
                 $database->query('DELETE FROM source_access_states WHERE source_id = ?', $sourceId);
                 $database->query('DELETE FROM sources WHERE id = ?', $sourceId);
+            }
+            if ($secondSourceId !== null) {
+                $database->query('DELETE FROM source_access_states WHERE source_id = ?', $secondSourceId);
+                $database->query('DELETE FROM sources WHERE id = ?', $secondSourceId);
             }
             if ($deviceId !== null) {
                 $database->query('DELETE FROM runner_devices WHERE id = ?', $deviceId);
