@@ -1,0 +1,30 @@
+{
+  "opportunityId": 1,
+  "expectedLockVersion": 1,
+  "candidateProfileId": 1,
+  "scoringRuleSetId": 1,
+  "recommendation": "verify",
+  "coverage": "0.500",
+  "confidence": "0.600",
+  "summary": "Synthetic assessment requiring verification.",
+  "scoreMin": null,
+  "scoreMax": null,
+  "verifiedPoints": null,
+  "authorType": "assistant",
+  "modelIdentifier": "synthetic-test-model",
+  "breakdowns": [
+    {
+      "area": "Terms",
+      "explanation": "Important terms are unknown.",
+      "evidence": "Synthetic source text."
+    }
+  ],
+  "findings": [
+    {
+      "type": "question",
+      "severity": "high",
+      "text": "Is remote work from Czechia allowed?",
+      "evidenceReference": "source_version"
+    }
+  ]
+}

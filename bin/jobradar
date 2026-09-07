@@ -7,6 +7,7 @@ use App\Bootstrap;
 use App\Console\CreateAdminCommand;
 use App\Console\ImportOpportunitiesCommand;
 use App\Console\ImportAssessmentConfigurationCommand;
+use App\Console\ImportAssessmentCommand;
 use App\Console\MigrateCommand;
 use Symfony\Component\Console\Application;
 
@@ -18,4 +19,5 @@ $application->add($container->getByType(MigrateCommand::class));
 $application->add($container->getByType(CreateAdminCommand::class));
 $application->add($container->getByType(ImportOpportunitiesCommand::class));
 $application->add($container->getByType(ImportAssessmentConfigurationCommand::class));
+$application->add($container->getByType(ImportAssessmentCommand::class));
 $application->run();

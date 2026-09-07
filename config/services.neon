@@ -12,6 +12,7 @@ services:
 	- App\Console\CreateAdminCommand
 	- App\Console\ImportOpportunitiesCommand
 	- App\Console\ImportAssessmentConfigurationCommand
+	- App\Console\ImportAssessmentCommand
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\OpportunityQueryService
@@ -22,3 +23,4 @@ services:
 	- App\Assessment\AssessmentQueryService
 	- App\Assessment\AssessmentConfigurationMapper
 	- App\Assessment\AssessmentConfigurationService
+	- App\Assessment\AssessmentPayloadMapper
