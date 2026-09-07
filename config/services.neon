@@ -10,3 +10,5 @@ services:
 			migrationDirectory: %appDir%/../migrations
 	- App\Console\MigrateCommand
 	- App\Console\CreateAdminCommand
+	- App\Opportunity\UrlNormalizer
+	- App\Opportunity\OpportunityImportService

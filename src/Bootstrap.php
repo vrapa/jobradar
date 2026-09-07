@@ -17,7 +17,7 @@ final class Bootstrap
 
     public function bootWebApplication(): Container
     {
-        $container = $this->createContainer(debug: true);
+        $container = $this->createContainer(enableTracy: true);
         $environment = getenv('APP_ENV') ?: 'production';
         $session = $container->getByType(Session::class);
         $session->setCookieParameters('/', null, $environment === 'production' ? true : null, 'Lax');
@@ -27,14 +27,14 @@ final class Bootstrap
 
     public function bootConsole(): Container
     {
-        return $this->createContainer(debug: false);
+        return $this->createContainer(enableTracy: false);
     }
 
-    private function createContainer(bool $debug): Container
+    private function createContainer(bool $enableTracy): Container
     {
         $this->loadEnvironment();
         $environment = getenv('APP_ENV') ?: 'production';
-        $debugMode = $debug && $environment === 'local'
+        $debugMode = $environment === 'local'
             && filter_var(getenv('APP_DEBUG') ?: '0', FILTER_VALIDATE_BOOL);
         $runtimeDirectory = getenv('APP_RUNTIME_DIR')
             ?: ($environment === 'local' ? sys_get_temp_dir() . '/jobradar' : $this->rootDirectory . '/var');
@@ -47,7 +47,7 @@ final class Bootstrap
         $configurator = new Configurator();
         $configurator->setDebugMode($debugMode);
         $configurator->setTempDirectory($runtimeDirectory . '/temp');
-        if ($debug) {
+        if ($enableTracy) {
             $configurator->enableTracy($runtimeDirectory . '/log');
         }
         $configurator->createRobotLoader()
