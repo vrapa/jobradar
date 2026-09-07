@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 namespace App\Presentation\Home;
 
+use App\Decision\OpportunityDecision;
+use App\Decision\OpportunityDecisionService;
+use App\Opportunity\OpportunityConflictException;
 use App\Opportunity\OpportunityQueryService;
 use App\Presentation\SecuredPresenter;
 use App\Search\SourceQueryService;
+use Nette\Application\UI\Form;
+use Nette\Application\UI\Multiplier;
+use Nette\Forms\Controls\SubmitButton;
 
 final class HomePresenter extends SecuredPresenter
 {
     public function __construct(
         private readonly OpportunityQueryService $opportunities,
         private readonly SourceQueryService $sourceQueries,
+        private readonly OpportunityDecisionService $decisions,
     ) {
         parent::__construct();
     }
@@ -43,5 +50,71 @@ final class HomePresenter extends SecuredPresenter
             'opportunities' => $items,
             'opportunityCount' => count($items),
         ]);
+    }
+
+    /** @return Multiplier<Form> */
+    protected function createComponentQuickDecision(): Multiplier
+    {
+        return new Multiplier(function (string $opportunityId): Form {
+            $id = filter_var($opportunityId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            $opportunity = is_int($id)
+                ? $this->opportunities->getDetail($id, (int) $this->getUser()->getId())
+                : null;
+            if ($opportunity === null) {
+                throw new \InvalidArgumentException('Nabídka pro rychlé rozhodnutí nebyla nalezena.');
+            }
+            $form = new Form();
+            $form->addHidden('lockVersion', (string) $opportunity->decisionState->lockVersion);
+            $form->addSelect('reason', 'Důvod nezájmu', [
+                '' => 'Důvod nezájmu…',
+                'low_rate' => 'Nízká sazba',
+                'workload' => 'Nevhodný rozsah',
+                'not_remote' => 'Nelze remote z ČR',
+                'language_communication' => 'Jazyk nebo komunikace',
+                'technology' => 'Nevhodné technologie',
+                'wordpress_small_web' => 'WordPress nebo malý web',
+                'expired' => 'Neaktuální nabídka',
+                'duplicate' => 'Duplicita',
+                'other' => 'Jiný důvod',
+            ])->setDefaultValue($opportunity->decisionState->reason ?? '');
+            $form->addProtection('Platnost rychlého rozhodnutí vypršela. Obnovte stránku.');
+            $form->addSubmit('react', 'Reagovat');
+            $form->addSubmit('uninteresting', 'Nezajímavé');
+            $form->addSubmit('undo', 'Zpět');
+            $form->onSuccess[] = function (Form $form, array|object $values) use ($id): void {
+                $this->quickDecisionSucceeded($form, (array) $values, $id);
+            };
+            return $form;
+        });
+    }
+
+    /** @param array<string, mixed> $values */
+    private function quickDecisionSucceeded(Form $form, array $values, int $opportunityId): void
+    {
+        $react = $form['react'];
+        $uninteresting = $form['uninteresting'];
+        if (!$react instanceof SubmitButton || !$uninteresting instanceof SubmitButton) {
+            throw new \LogicException('Formulář rychlého rozhodnutí není správně sestaven.');
+        }
+        $decision = $react->isSubmittedBy()
+            ? OpportunityDecision::React
+            : ($uninteresting->isSubmittedBy() ? OpportunityDecision::Uninteresting : OpportunityDecision::Undecided);
+        try {
+            $result = $this->decisions->setManualDecision(
+                (int) $this->getUser()->getId(),
+                $opportunityId,
+                (int) ($values['lockVersion'] ?? -1),
+                $decision,
+                is_string($values['reason'] ?? null) ? $values['reason'] : null,
+            );
+        } catch (OpportunityConflictException $exception) {
+            $this->flashMessage($exception->getMessage(), 'warning');
+            $this->redirect('this');
+        } catch (\InvalidArgumentException $exception) {
+            $form->addError($exception->getMessage());
+            return;
+        }
+        $this->flashMessage($result->changed ? 'Rozhodnutí bylo uloženo.' : 'Rozhodnutí už bylo aktuální.', 'success');
+        $this->redirect('this');
     }
 }
