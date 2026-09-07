@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: jobradar
+          MYSQL_USER: jobradar
+          MYSQL_PASSWORD: synthetic-ci-password
+          MYSQL_ROOT_PASSWORD: synthetic-ci-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -psynthetic-ci-root-password --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      APP_ENV: local
+      APP_DEBUG: '0'
+      APP_URL: http://localhost
+      APP_RUNTIME_DIR: /tmp/jobradar-ci
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: jobradar
+      DB_USER: jobradar
+      DB_PASSWORD: synthetic-ci-password
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, filter, json, mbstring, pdo, pdo_mysql, session
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Migrate test database
+        run: php bin/jobradar database:migrate
+
+      - name: Run PHP tests and static analysis
+        run: composer check
+
+      - name: Lint Latte templates
+        run: vendor/bin/latte-lint src/Presentation
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20.19'
+          package-manager-cache: false
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Verify generated assets are committed
+        run: git diff --exit-code -- public/assets
+
+      - name: Build standalone image
+        run: docker build --tag jobradar:ci .

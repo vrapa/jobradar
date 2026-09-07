@@ -19,6 +19,8 @@ composer check
 npm run build
 ```
 
+GitHub Actions repeats these checks against MySQL 8.4, verifies that generated frontend assets are committed, and builds the standalone Docker image. Pull requests should keep the `CI` workflow green.
+
 Functional changes must update `docs/implementation-plan.md`. Keep domain behavior outside presenters and API handlers so the web UI and versioned API use the same services.
 
 ## Safety and test data
