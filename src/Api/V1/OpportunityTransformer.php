@@ -25,6 +25,23 @@ final class OpportunityTransformer
             'found_at' => $opportunity->foundAt->format(DATE_ATOM),
             'decision' => $opportunity->decision->value,
             'workflow_status' => $opportunity->workflowStatus,
+            'rate' => [
+                'min' => $opportunity->rateMin,
+                'max' => $opportunity->rateMax,
+                'currency' => $opportunity->currency,
+                'unit' => $opportunity->rateUnit,
+            ],
+            'workload' => [
+                'min' => $opportunity->workloadMin,
+                'max' => $opportunity->workloadMax,
+                'unit' => $opportunity->workloadUnit,
+            ],
+            'assessment' => [
+                'score_min' => $opportunity->scoreMin,
+                'score_max' => $opportunity->scoreMax,
+                'coverage_percent' => $opportunity->coveragePercent,
+                'recommendation' => $opportunity->recommendation,
+            ],
         ];
     }
 
@@ -47,6 +64,23 @@ final class OpportunityTransformer
             'found_at' => $opportunity->foundAt->format(DATE_ATOM),
             'decision' => $opportunity->decisionState->decision->value,
             'workflow_status' => $opportunity->decisionState->workflowStatus,
+            'rate' => [
+                'min' => $opportunity->terms?->rateMin,
+                'max' => $opportunity->terms?->rateMax,
+                'currency' => $opportunity->terms?->currency,
+                'unit' => $opportunity->terms?->rateUnit,
+            ],
+            'workload' => [
+                'min' => $opportunity->terms?->workloadMin,
+                'max' => $opportunity->terms?->workloadMax,
+                'unit' => $opportunity->terms?->workloadUnit,
+            ],
+            'assessment' => [
+                'score_min' => null,
+                'score_max' => null,
+                'coverage_percent' => null,
+                'recommendation' => null,
+            ],
             'acquired_at' => $opportunity->acquiredAt->format(DATE_ATOM),
             'version_count' => $opportunity->versionCount,
             'lock_version' => $opportunity->lockVersion,

@@ -18,6 +18,17 @@ final readonly class OpportunitySummary
         public \DateTimeInterface $foundAt,
         public OpportunityDecision $decision,
         public string $workflowStatus,
+        public ?string $rateMin,
+        public ?string $rateMax,
+        public ?string $currency,
+        public ?string $rateUnit,
+        public ?string $workloadMin,
+        public ?string $workloadMax,
+        public ?string $workloadUnit,
+        public ?string $scoreMin,
+        public ?string $scoreMax,
+        public ?int $coveragePercent,
+        public ?string $recommendation,
     ) {
     }
 }

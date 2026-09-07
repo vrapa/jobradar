@@ -39,10 +39,15 @@ final class OpportunityQueryService
         $rows = $this->database->fetchAll(
             'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
                     v.original_title, v.translated_title, v.summary, v.incomplete,
+                    terms.rate_min, terms.rate_max, terms.currency, terms.rate_unit,
+                    terms.workload_min, terms.workload_max, terms.workload_unit,
+                    assessment.score_min, assessment.score_max, assessment.coverage, assessment.recommendation,
                     COALESCE(state.decision, ?) AS decision, COALESCE(state.workflow_status, ?) AS workflow_status
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
+             LEFT JOIN opportunity_terms terms ON terms.source_version_id = v.id
+             LEFT JOIN assessments assessment ON assessment.opportunity_id = o.id AND assessment.superseded_at IS NULL
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
              WHERE o.archived_at IS NULL
                AND (
@@ -76,6 +81,17 @@ final class OpportunityQueryService
                 foundAt: self::dateTime($row['found_at']),
                 decision: OpportunityDecision::from((string) $row['decision']),
                 workflowStatus: (string) $row['workflow_status'],
+                rateMin: self::nullableDecimal($row['rate_min']),
+                rateMax: self::nullableDecimal($row['rate_max']),
+                currency: self::nullableString($row['currency']),
+                rateUnit: self::nullableString($row['rate_unit']),
+                workloadMin: self::nullableDecimal($row['workload_min']),
+                workloadMax: self::nullableDecimal($row['workload_max']),
+                workloadUnit: self::nullableString($row['workload_unit']),
+                scoreMin: self::nullableDecimal($row['score_min']),
+                scoreMax: self::nullableDecimal($row['score_max']),
+                coveragePercent: $row['coverage'] === null ? null : (int) round((float) $row['coverage'] * 100),
+                recommendation: self::nullableString($row['recommendation']),
             ),
             $rows,
         );
@@ -223,6 +239,11 @@ final class OpportunityQueryService
     private static function nullableString(mixed $value): ?string
     {
         return $value === null || $value === '' ? null : (string) $value;
+    }
+
+    private static function nullableDecimal(mixed $value): ?string
+    {
+        return $value === null ? null : (string) (float) $value;
     }
 
     private static function dateTime(mixed $value): \DateTimeInterface

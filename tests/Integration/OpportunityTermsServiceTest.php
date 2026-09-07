@@ -75,6 +75,14 @@ final class OpportunityTermsServiceTest extends TestCase
             self::assertSame('Text nabídky', $detail->terms?->rateSource);
             self::assertNull($detail->terms->workFromCzechia);
             self::assertCount(2, $detail->technologies);
+            $summary = array_values(array_filter(
+                $queries->listCurrent(),
+                static fn ($item): bool => $item->id === $opportunityId,
+            ))[0];
+            self::assertNull($summary->rateMin);
+            self::assertSame('900', $summary->rateMax);
+            self::assertSame('CZK', $summary->currency);
+            self::assertNull($summary->coveragePercent);
 
             $this->expectException(OpportunityConflictException::class);
             $service->save($opportunityId, 1, new OpportunityTermsInput(), []);

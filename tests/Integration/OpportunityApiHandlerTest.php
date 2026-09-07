@@ -73,6 +73,8 @@ final class OpportunityApiHandlerTest extends TestCase
             self::assertTrue($detail['data']['incomplete']);
             self::assertSame(1, $detail['data']['version_count']);
             self::assertNull($detail['data']['current_assessment']);
+            self::assertNull($detail['data']['rate']['min']);
+            self::assertNull($detail['data']['assessment']['score_min']);
             self::assertSame(2, (int) $database->fetchField(
                 "SELECT COUNT(*) FROM audit_log WHERE event_type = 'opportunity.manual_imported' AND actor_user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.opportunity_id')) = ?",
                 $userId,

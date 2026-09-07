@@ -49,6 +49,14 @@ final class GetOpportunityHandler extends BaseHandler
         $data = $this->transformer->transformDetail($opportunity);
         $assessment = $this->assessments->getCurrent($id);
         $data['current_assessment'] = $assessment === null ? null : $this->assessmentTransformer->transform($assessment);
+        if ($assessment !== null) {
+            $data['assessment'] = [
+                'score_min' => $assessment->scoreMin,
+                'score_max' => $assessment->scoreMax,
+                'coverage_percent' => (int) round((float) $assessment->coverage * 100),
+                'recommendation' => $assessment->recommendation->value,
+            ];
+        }
         return new JsonApiResponse(200, ['data' => $data]);
     }
 }

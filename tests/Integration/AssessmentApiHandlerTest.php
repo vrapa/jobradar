@@ -11,6 +11,7 @@ use App\Api\V1\GetOpportunityHandler;
 use App\Bootstrap;
 use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
+use App\Opportunity\OpportunityQueryService;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 use Tomaj\NetteApi\Response\JsonApiResponse;
@@ -28,6 +29,7 @@ final class AssessmentApiHandlerTest extends TestCase
         $context = $container->getByType(ApiRequestContext::class);
         $handler = $container->getByType(SaveOpportunityAssessmentHandler::class);
         $getOpportunity = $container->getByType(GetOpportunityHandler::class);
+        $opportunityQueries = $container->getByType(OpportunityQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $profileId = $ruleSetId = $opportunityId = null;
         $clientIdentifier = 'synthetic-assessment-client-' . $unique;
@@ -89,6 +91,14 @@ final class AssessmentApiHandlerTest extends TestCase
             self::assertSame('verify', $detail['data']['current_assessment']['recommendation']);
             self::assertSame('synthetic-model', $detail['data']['current_assessment']['model_identifier']);
             self::assertSame('high', $detail['data']['current_assessment']['findings'][0]['severity']);
+            self::assertSame(50, $detail['data']['assessment']['coverage_percent']);
+            $summary = array_values(array_filter(
+                $opportunityQueries->listCurrent($userId),
+                static fn ($item): bool => $item->id === $opportunityId,
+            ))[0];
+            self::assertSame(50, $summary->coveragePercent);
+            self::assertSame('verify', $summary->recommendation);
+            self::assertNull($summary->scoreMin);
 
             $replayed = self::json($handler->handle(['id' => $opportunityId, 'body' => $body]));
             self::assertSame(201, $replayed->getCode());

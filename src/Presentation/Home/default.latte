@@ -55,6 +55,33 @@
                 <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id" class="stretched-link text-decoration-none">{$opportunity->title}</a></h2>
                 <p class="text-body-secondary mb-3">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>
                 <p n:if="$opportunity->summary !== null" class="small mb-3">{$opportunity->summary}</p>
+                <dl class="row g-2 small mb-3">
+                    <div class="col-12 col-sm-4">
+                        <dt class="text-body-secondary fw-normal">Sazba</dt>
+                        <dd class="fw-semibold mb-0">
+                            {if $opportunity->rateMin !== null || $opportunity->rateMax !== null}
+                                {$opportunity->rateMin ?? '?'}–{$opportunity->rateMax ?? '?'} {$opportunity->currency ?? ''}{if $opportunity->rateUnit !== null}/{$opportunity->rateUnit}{/if}
+                            {else}Neznámá{/if}
+                        </dd>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <dt class="text-body-secondary fw-normal">Rozsah</dt>
+                        <dd class="fw-semibold mb-0">
+                            {if $opportunity->workloadMin !== null || $opportunity->workloadMax !== null}
+                                {$opportunity->workloadMin ?? '?'}–{$opportunity->workloadMax ?? '?'} {$opportunity->workloadUnit ?? ''}
+                            {else}Neznámý{/if}
+                        </dd>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <dt class="text-body-secondary fw-normal">Skóre</dt>
+                        <dd class="fw-semibold mb-0">
+                            {if $opportunity->scoreMin !== null && $opportunity->scoreMax !== null}
+                                {$opportunity->scoreMin}–{$opportunity->scoreMax}
+                            {else}Nevypočteno{/if}
+                            <span n:if="$opportunity->coveragePercent !== null" class="d-block fw-normal text-body-secondary">pokrytí {$opportunity->coveragePercent} %</span>
+                        </dd>
+                    </div>
+                </dl>
                 <p class="small text-body-secondary mt-auto mb-0">Nalezeno {$opportunity->foundAt|date:'j. n. Y H:i'}</p>
             </div>
         </article>
