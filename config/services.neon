@@ -13,3 +13,4 @@ services:
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\OpportunityQueryService
+	- App\Opportunity\OpportunityTermsService
