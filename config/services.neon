@@ -10,7 +10,9 @@ services:
 			migrationDirectory: %appDir%/../migrations
 	- App\Console\MigrateCommand
 	- App\Console\CreateAdminCommand
+	- App\Console\ImportOpportunitiesCommand
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\OpportunityQueryService
 	- App\Opportunity\OpportunityTermsService
+	- App\Opportunity\OpportunityJsonMapper

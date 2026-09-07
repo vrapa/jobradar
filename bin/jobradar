@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use App\Bootstrap;
 use App\Console\CreateAdminCommand;
+use App\Console\ImportOpportunitiesCommand;
 use App\Console\MigrateCommand;
 use Symfony\Component\Console\Application;
 
@@ -14,4 +15,5 @@ $container = (new Bootstrap(dirname(__DIR__)))->bootConsole();
 $application = new Application('JobRadar', '0.1.0-dev');
 $application->add($container->getByType(MigrateCommand::class));
 $application->add($container->getByType(CreateAdminCommand::class));
+$application->add($container->getByType(ImportOpportunitiesCommand::class));
 $application->run();
