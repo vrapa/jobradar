@@ -13,6 +13,7 @@
         <div class="container-xl">
             <a class="navbar-brand fw-semibold" n:href="Home:">JobRadar</a>
             <div class="ms-auto d-flex align-items-center gap-3">
+                <a n:href="OpportunityImport:" class="nav-link text-white d-none d-sm-inline">Přidat nabídku</a>
                 <span class="navbar-text d-none d-sm-inline">{$user->identity->displayName}</span>
                 {form signOutForm, class: 'm-0'}
                     <button n:name="send" class="btn btn-sm btn-outline-light">Odhlásit</button>

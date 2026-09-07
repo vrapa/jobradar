@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Bootstrap;
 use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
+use App\Opportunity\OpportunityQueryService;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 
@@ -20,6 +21,7 @@ final class OpportunityImportServiceTest extends TestCase
 
         $container = (new Bootstrap(dirname(__DIR__, 2)))->bootConsole();
         $service = $container->getByType(OpportunityImportService::class);
+        $queries = $container->getByType(OpportunityQueryService::class);
         $database = $container->getByType(Connection::class);
         $unique = bin2hex(random_bytes(8));
         $baseUrl = sprintf('https://jobs.example.test/positions/%s', $unique);
@@ -78,6 +80,19 @@ final class OpportunityImportServiceTest extends TestCase
             self::assertSame(2, (int) $database->fetchField(
                 'SELECT lock_version FROM opportunities WHERE id = ?',
                 $opportunityId,
+            ));
+
+            $detail = $queries->getDetail($opportunityId);
+            self::assertNotNull($detail);
+            self::assertSame('Synthetic offer version two with changed terms.', $detail->originalText);
+            self::assertSame(2, $detail->versionCount);
+            self::assertTrue(array_any(
+                $queries->listCurrent(),
+                static fn ($item): bool => $item->id === $opportunityId,
+            ));
+            self::assertSame(4, (int) $database->fetchField(
+                "SELECT COUNT(*) FROM audit_log WHERE event_type = 'opportunity.manual_imported' AND JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.opportunity_id')) = ?",
+                (string) $opportunityId,
             ));
         } finally {
             if ($opportunityId !== null) {

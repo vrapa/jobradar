@@ -21,6 +21,16 @@ body {
     --bs-card-border-color: rgba(16, 36, 62, .08);
 }
 
+.offer-text,
+.preserve-lines {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.offer-text {
+    line-height: 1.65;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         scroll-behavior: auto !important;

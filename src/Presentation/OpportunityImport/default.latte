@@ -1,0 +1,74 @@
+{block title}Přidat nabídku{/block}
+
+{block content}
+<nav aria-label="Drobečková navigace" class="mb-3">
+    <a n:href="Home:" class="text-decoration-none">Nabídky</a>
+    <span class="text-body-secondary mx-2" aria-hidden="true">/</span>
+    <span aria-current="page">Přidat</span>
+</nav>
+
+<header class="mb-4">
+    <h1 class="display-6 fw-bold">Přidat nabídku</h1>
+    <p class="lead text-body-secondary">Vložte původní obsah; neznámé údaje nechte prázdné.</p>
+</header>
+
+<div class="card shadow-sm">
+    <div class="card-body p-3 p-md-4">
+        {form importForm}
+            <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert">
+                <ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label n:name="url" class="form-label">URL nabídky</label>
+                    <input n:name="url" class="form-control">
+                </div>
+                <div class="col-12 col-md-8">
+                    <label n:name="companyName" class="form-label">Společnost <span class="text-body-secondary">(volitelné)</span></label>
+                    <input n:name="companyName" class="form-control">
+                </div>
+                <div class="col-12 col-md-4">
+                    <label n:name="sourceLanguage" class="form-label">Jazyk originálu <span class="text-body-secondary">(volitelné)</span></label>
+                    <input n:name="sourceLanguage" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label n:name="originalTitle" class="form-label">Původní titulek</label>
+                    <input n:name="originalTitle" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label n:name="originalText" class="form-label">Původní text</label>
+                    <textarea n:name="originalText" class="form-control"></textarea>
+                </div>
+            </div>
+
+            <hr class="my-4">
+            <h2 class="h5">Překlad a poznámky <span class="text-body-secondary fw-normal">(volitelné)</span></h2>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label n:name="translatedTitle" class="form-label">Český titulek</label>
+                    <input n:name="translatedTitle" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label n:name="translatedText" class="form-label">Český překlad</label>
+                    <textarea n:name="translatedText" class="form-control"></textarea>
+                </div>
+                <div class="col-12">
+                    <label n:name="summary" class="form-label">Shrnutí</label>
+                    <textarea n:name="summary" class="form-control"></textarea>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input n:name="incomplete" class="form-check-input">
+                        <label n:name="incomplete" class="form-check-label">Zdrojový text je neúplný</label>
+                    </div>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button n:name="send" class="btn btn-primary">Uložit nabídku</button>
+                    <a n:href="Home:" class="btn btn-outline-secondary">Zrušit</a>
+                </div>
+            </div>
+        {/form}
+    </div>
+</div>
+{/block}

@@ -1,0 +1,52 @@
+{block title}{$opportunity->title}{/block}
+
+{block content}
+<nav aria-label="Drobečková navigace" class="mb-3">
+    <a n:href="Home:" class="text-decoration-none">Nabídky</a>
+    <span class="text-body-secondary mx-2" aria-hidden="true">/</span>
+    <span aria-current="page">Detail</span>
+</nav>
+
+<header class="mb-4">
+    <div class="d-flex flex-wrap gap-2 mb-2">
+        <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
+        <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplný zdroj</span>
+        <span class="badge text-bg-light border">{$opportunity->versionCount} {if $opportunity->versionCount === 1}verze{else}verzí{/if}</span>
+    </div>
+    <h1 class="display-6 fw-bold mb-2">{$opportunity->title}</h1>
+    <p class="lead text-body-secondary">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>
+    <a href="{$opportunity->canonicalUrl}" class="btn btn-outline-primary" rel="noopener noreferrer" target="_blank">Otevřít původní stránku</a>
+</header>
+
+<section n:if="$opportunity->summary !== null" class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h5">Shrnutí</h2>
+        <p class="mb-0 preserve-lines">{$opportunity->summary}</p>
+    </div>
+</section>
+
+<div class="row g-4">
+    <div n:if="$opportunity->translatedText !== null" class="col-12 col-xl-6">
+        <section class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h4">Český překlad</h2>
+                <p n:if="$opportunity->translatedTitle !== null" class="fw-semibold">{$opportunity->translatedTitle}</p>
+                <div class="offer-text">{$opportunity->translatedText}</div>
+            </div>
+        </section>
+    </div>
+    <div class="col-12 {$opportunity->translatedText !== null ? 'col-xl-6' : ''}">
+        <section class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h4">Originál</h2>
+                <p class="fw-semibold">{$opportunity->originalTitle}</p>
+                <div class="offer-text">{$opportunity->originalText}</div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<p class="small text-body-secondary mt-4 mb-0">
+    Nalezeno {$opportunity->foundAt|date:'j. n. Y H:i'}, aktuální verze získána {$opportunity->acquiredAt|date:'j. n. Y H:i'}{if $opportunity->sourceLanguage !== null}, jazyk {$opportunity->sourceLanguage}{/if}.
+</p>
+{/block}
