@@ -27,3 +27,4 @@ services:
 	- App\Assessment\AssessmentPayloadMapper
 	- App\Search\SearchRequestService
 	- App\Search\SourceQueryService
+	- App\Search\RunnerLeaseService
