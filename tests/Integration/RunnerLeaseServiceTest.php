@@ -7,6 +7,9 @@ namespace Tests\Integration;
 use App\Bootstrap;
 use App\Search\RunnerLeaseService;
 use App\Search\SearchRequestService;
+use App\Search\SearchRunService;
+use App\Search\SourceRunResult;
+use App\Search\SourceRunScope;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 
@@ -21,6 +24,7 @@ final class RunnerLeaseServiceTest extends TestCase
         $database = $container->getByType(Connection::class);
         $requests = $container->getByType(SearchRequestService::class);
         $leases = $container->getByType(RunnerLeaseService::class);
+        $runs = $container->getByType(SearchRunService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $sourceId = $deviceId = $requestId = $runId = null;
 
@@ -69,6 +73,37 @@ final class RunnerLeaseServiceTest extends TestCase
             self::assertNull($planned['displayed_count']);
             self::assertNull($planned['finished_at']);
             self::assertNull($leases->claimNext($deviceId));
+
+            $runs->startSource(
+                $requestId,
+                $lease->token,
+                $sourceId,
+                new SourceRunScope('První stránka veřejného API.', ['query' => 'php']),
+            );
+            self::assertSame('running', $database->fetchField(
+                'SELECT source_status FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
+            $runs->finishSource(
+                $requestId,
+                $lease->token,
+                $sourceId,
+                new SourceRunResult('complete', 1, 0, 0, 0, 0, 0, 0),
+            );
+            self::assertSame('complete', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
+            self::assertSame('complete', $database->fetchField('SELECT run_status FROM search_runs WHERE id = ?', $runId));
+            self::assertSame(0, (int) $database->fetchField(
+                'SELECT displayed_count FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
+            self::assertSame('První stránka veřejného API.', $database->fetchField(
+                'SELECT query_text FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
+            self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
         } finally {
             if ($runId !== null) {
                 $database->query('DELETE FROM search_run_sources WHERE search_run_id = ?', $runId);
@@ -86,6 +121,7 @@ final class RunnerLeaseServiceTest extends TestCase
                 $database->query('DELETE FROM runner_devices WHERE id = ?', $deviceId);
             }
             if ($sourceId !== null) {
+                $database->query('DELETE FROM source_access_states WHERE source_id = ?', $sourceId);
                 $database->query('DELETE FROM sources WHERE id = ?', $sourceId);
             }
             if ($userId !== null) {
