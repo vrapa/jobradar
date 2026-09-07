@@ -12,6 +12,8 @@ use App\Search\SearchRunService;
 use App\Search\SourceQueryService;
 use App\Search\SourceRunResult;
 use App\Search\SourceRunScope;
+use App\Api\V1\LoginRequiredSourcesHandler;
+use Tomaj\NetteApi\Response\JsonApiResponse;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 
@@ -29,6 +31,7 @@ final class SearchRequestControlServiceTest extends TestCase
         $runs = $container->getByType(SearchRunService::class);
         $controls = $container->getByType(SearchRequestControlService::class);
         $queries = $container->getByType(SourceQueryService::class);
+        $loginSourcesHandler = $container->getByType(LoginRequiredSourcesHandler::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $sourceId = $deviceId = $requestId = $runId = null;
 
@@ -74,6 +77,11 @@ final class SearchRequestControlServiceTest extends TestCase
             self::assertTrue($waitingDetail->sources[0]->loginRequired);
             self::assertNull($waitingDetail->sources[0]->pagesTraversed);
             self::assertNull($queries->getRequestDetail($userId + 1, $requestId));
+            $loginResponse = $loginSourcesHandler->handle([]);
+            self::assertInstanceOf(JsonApiResponse::class, $loginResponse);
+            $loginPayload = $loginResponse->getPayload();
+            self::assertIsArray($loginPayload);
+            self::assertContains($sourceId, array_column($loginPayload['data'], 'id'));
             self::assertSame('resume_requested', $controls->requestResume($userId, $requestId));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
 

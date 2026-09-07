@@ -35,6 +35,8 @@ services:
 	- App\Api\Auth\ApiCredentialService
 	- App\Api\Auth\ApiRequestContext
 	- App\Api\V1\SourcesHandler
+	- App\Api\V1\SourceTransformer
+	- App\Api\V1\LoginRequiredSourcesHandler
 	- App\Api\V1\SearchRequestTransformer
 	- App\Api\V1\CreateSearchRequestHandler
 	- App\Api\V1\GetSearchRequestHandler
@@ -66,6 +68,7 @@ services:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'sources'), 'App\Api\V1\SourcesHandler', @sourcesApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'sources', 'requiring-login'), 'App\Api\V1\LoginRequiredSourcesHandler', @sourcesApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-requests'), 'App\Api\V1\CreateSearchRequestHandler', @searchControlApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'search-requests', 'detail'), 'App\Api\V1\GetSearchRequestHandler', @searchControlApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-requests', 'resume'), 'App\Api\V1\ResumeSearchRequestHandler', @searchControlApiAuthorization)
