@@ -6,8 +6,9 @@ namespace App\Api\V1;
 
 use App\Api\AssistantActionService;
 use App\Api\Auth\ApiRequestContext;
+use App\Decision\DecisionBatchItem;
+use App\Decision\DecisionDelegationService;
 use App\Decision\OpportunityDecision;
-use App\Decision\OpportunityDecisionService;
 use App\Opportunity\OpportunityConflictException;
 use Tomaj\NetteApi\Handlers\BaseHandler;
 use Tomaj\NetteApi\Params\GetInputParam;
@@ -21,7 +22,7 @@ final class SetOpportunityDecisionHandler extends BaseHandler
     public function __construct(
         private readonly ApiRequestContext $requestContext,
         private readonly AssistantActionService $actions,
-        private readonly OpportunityDecisionService $decisions,
+        private readonly DecisionDelegationService $delegations,
     ) {
         parent::__construct();
     }
@@ -37,9 +38,10 @@ final class SetOpportunityDecisionHandler extends BaseHandler
             (new GetInputParam('id', InputType::INTEGER))->setRequired(),
             (new JsonInputParam('body', json_encode([
                 'type' => 'object',
-                'required' => ['expected_lock_version', 'decision', 'idempotency_key'],
+                'required' => ['delegation_id', 'expected_lock_version', 'decision', 'idempotency_key'],
                 'additionalProperties' => false,
                 'properties' => [
+                    'delegation_id' => ['type' => 'integer', 'minimum' => 1],
                     'expected_lock_version' => ['type' => 'integer', 'minimum' => 0],
                     'decision' => ['type' => 'string', 'enum' => ['undecided', 'react', 'uninteresting']],
                     'reason' => ['type' => ['string', 'null']],
@@ -58,15 +60,16 @@ final class SetOpportunityDecisionHandler extends BaseHandler
         if (!is_int($id) || $id < 1 || !is_array($body) || array_is_list($body)) {
             return self::error(422, 'invalid_decision', 'Údaje rozhodnutí nejsou platné.');
         }
-        if (array_diff(array_keys($body), ['expected_lock_version', 'decision', 'reason', 'note', 'idempotency_key']) !== []) {
+        if (array_diff(array_keys($body), ['delegation_id', 'expected_lock_version', 'decision', 'reason', 'note', 'idempotency_key']) !== []) {
             return self::error(422, 'invalid_decision', 'Rozhodnutí obsahuje neznámá pole.');
         }
+        $delegationId = $body['delegation_id'] ?? null;
         $expectedLockVersion = $body['expected_lock_version'] ?? null;
         $decisionValue = $body['decision'] ?? null;
         $idempotencyKey = $body['idempotency_key'] ?? null;
         $reason = $body['reason'] ?? null;
         $note = $body['note'] ?? null;
-        if (!is_int($expectedLockVersion) || $expectedLockVersion < 0 || !is_string($decisionValue)
+        if (!is_int($delegationId) || $delegationId < 1 || !is_int($expectedLockVersion) || $expectedLockVersion < 0 || !is_string($decisionValue)
             || !is_string($idempotencyKey) || ($reason !== null && !is_string($reason)) || ($note !== null && !is_string($note))
         ) {
             return self::error(422, 'invalid_decision', 'Údaje rozhodnutí nejsou platné.');
@@ -82,6 +85,7 @@ final class SetOpportunityDecisionHandler extends BaseHandler
                 'opportunity',
                 $id,
                 [
+                    'delegation_id' => $delegationId,
                     'expected_lock_version' => $expectedLockVersion,
                     'decision' => $decision->value,
                     'reason' => $reason,
@@ -99,16 +103,15 @@ final class SetOpportunityDecisionHandler extends BaseHandler
         }
 
         try {
-            $result = $this->decisions->setAssistantDecision(
+            $batch = $this->delegations->applyBatch(
                 $identity->ownerUserId,
-                $id,
-                $expectedLockVersion,
-                $decision,
-                $reason,
-                $note,
+                $delegationId,
+                [new DecisionBatchItem($id, $expectedLockVersion, $decision, $reason, $note)],
             );
+            $result = $batch->resultsByOpportunityId[$id] ?? throw new \LogicException('Výsledek rozhodnutí chybí.');
             $response = ['data' => [
                 'opportunity_id' => $id,
+                'delegation_id' => $delegationId,
                 'previous_decision' => $result->previousDecision->value,
                 'decision' => $result->decision->value,
                 'lock_version' => $result->lockVersion,

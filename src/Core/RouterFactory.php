@@ -65,6 +65,14 @@ final class RouterFactory
             'apiAction' => 'assessment',
         ]);
         $router->addRoute('api/v1/opportunities/<id \d+>', [...$opportunityApi, 'apiAction' => 'detail']);
+        $router->addRoute('api/v1/decision-delegations/<id \d+>/decisions', [
+            'presenter' => 'Api:Api',
+            'action' => 'default',
+            'version' => '1',
+            'package' => 'decision-delegations',
+            'apiAction' => 'decisions',
+            'id' => [Route::FILTER_IN => self::publishApiId(...)],
+        ]);
         $router->addRoute('api/v<version>/<package>[/<apiAction>]', 'Api:Api:default');
         $router->addRoute('prihlaseni', 'Sign:in');
         $router->addRoute('zdroje', 'Source:default');

@@ -7,6 +7,11 @@ namespace Tests\Integration;
 use App\Assessment\AssessmentInput;
 use App\Assessment\AssessmentRecommendation;
 use App\Assessment\AssessmentService;
+use App\Api\Auth\ApiIdentity;
+use App\Api\Auth\ApiRequestContext;
+use App\Api\V1\ApplyDecisionDelegationHandler;
+use App\Api\V1\CreateDecisionDelegationHandler;
+use App\Api\V1\SetOpportunityDecisionHandler;
 use App\Bootstrap;
 use App\Decision\DecisionBatchItem;
 use App\Decision\DecisionDelegationService;
@@ -17,6 +22,7 @@ use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
+use Tomaj\NetteApi\Response\JsonApiResponse;
 
 final class DecisionDelegationServiceTest extends TestCase
 {
@@ -31,8 +37,13 @@ final class DecisionDelegationServiceTest extends TestCase
         $assessments = $container->getByType(AssessmentService::class);
         $decisions = $container->getByType(OpportunityDecisionService::class);
         $delegations = $container->getByType(DecisionDelegationService::class);
+        $context = $container->getByType(ApiRequestContext::class);
+        $createDelegation = $container->getByType(CreateDecisionDelegationHandler::class);
+        $applyDelegation = $container->getByType(ApplyDecisionDelegationHandler::class);
+        $setDecision = $container->getByType(SetOpportunityDecisionHandler::class);
         $unique = bin2hex(random_bytes(8));
-        $userId = $profileId = $ruleSetId = $delegationId = null;
+        $clientIdentifier = 'synthetic-delegation-client-' . $unique;
+        $userId = $profileId = $ruleSetId = $delegationId = $apiDelegationId = $singleDelegationId = null;
         $opportunityIds = [];
 
         try {
@@ -170,13 +181,96 @@ final class DecisionDelegationServiceTest extends TestCase
                 'SELECT actor_type FROM opportunity_decision_history WHERE delegation_id = ?',
                 $delegationId,
             ));
+
+            $context->authenticate(new ApiIdentity(
+                1,
+                1,
+                $userId,
+                $clientIdentifier,
+                'Synthetic delegation client',
+                'mcp',
+                ['decisions:write'],
+            ));
+            $createBody = [
+                'opportunity_ids' => $opportunityIds,
+                'candidate_profile_id' => $profileId,
+                'scoring_rule_set_id' => $ruleSetId,
+                'expires_at' => $now->modify('+2 hours')->format(DATE_ATOM),
+                'idempotency_key' => 'create-delegation-' . $unique,
+            ];
+            $created = self::json($createDelegation->handle(['body' => $createBody]));
+            self::assertSame(201, $created->getCode());
+            $createdPayload = self::payload($created);
+            $apiDelegationId = $createdPayload['data']['id'];
+            self::assertIsInt($apiDelegationId);
+            self::assertFalse($createdPayload['data']['application_submitted']);
+            self::assertEquals(
+                $createdPayload,
+                self::payload(self::json($createDelegation->handle(['body' => $createBody]))),
+            );
+
+            $batchBody = [
+                'decisions' => [
+                    [
+                        'opportunity_id' => $opportunityIds[0],
+                        'expected_lock_version' => 1,
+                        'decision' => 'uninteresting',
+                        'reason' => 'workload',
+                    ],
+                    [
+                        'opportunity_id' => $opportunityIds[1],
+                        'expected_lock_version' => 1,
+                        'decision' => 'uninteresting',
+                        'reason' => 'low_rate',
+                    ],
+                ],
+                'idempotency_key' => 'apply-delegation-' . $unique,
+            ];
+            $applied = self::json($applyDelegation->handle(['id' => $apiDelegationId, 'body' => $batchBody]));
+            self::assertSame(200, $applied->getCode());
+            $appliedPayload = self::payload($applied);
+            self::assertSame(2, $appliedPayload['data']['processed']);
+            self::assertSame(1, $appliedPayload['data']['changed']);
+            self::assertFalse($appliedPayload['data']['application_submitted']);
+            self::assertEquals(
+                $appliedPayload,
+                self::payload(self::json($applyDelegation->handle(['id' => $apiDelegationId, 'body' => $batchBody]))),
+            );
+
+            $singleCreateBody = $createBody;
+            $singleCreateBody['opportunity_ids'] = [$opportunityIds[0]];
+            $singleCreateBody['idempotency_key'] = 'create-single-delegation-' . $unique;
+            $singleCreated = self::payload(self::json($createDelegation->handle(['body' => $singleCreateBody])));
+            $singleDelegationId = $singleCreated['data']['id'];
+            self::assertIsInt($singleDelegationId);
+            $singleBody = [
+                'delegation_id' => $singleDelegationId,
+                'expected_lock_version' => 2,
+                'decision' => 'react',
+                'idempotency_key' => 'single-decision-' . $unique,
+            ];
+            $single = self::json($setDecision->handle([
+                'id' => $opportunityIds[0],
+                'body' => $singleBody,
+            ]));
+            self::assertSame(200, $single->getCode());
+            $singlePayload = self::payload($single);
+            self::assertSame($singleDelegationId, $singlePayload['data']['delegation_id']);
+            self::assertSame(3, $singlePayload['data']['lock_version']);
+            self::assertFalse($singlePayload['data']['application_submitted']);
         } finally {
+            $context->clear();
+            $database->query('DELETE FROM assistant_actions WHERE client_identifier = ?', $clientIdentifier);
             if ($opportunityIds !== []) {
                 $database->query('DELETE FROM opportunity_decision_history WHERE opportunity_id IN (?)', $opportunityIds);
                 $database->query('DELETE FROM user_opportunity_state WHERE opportunity_id IN (?)', $opportunityIds);
             }
-            if ($delegationId !== null) {
-                $database->query('DELETE FROM decision_delegations WHERE id = ?', $delegationId);
+            $delegationIds = array_values(array_filter(
+                [$delegationId, $apiDelegationId, $singleDelegationId],
+                static fn (?int $id): bool => $id !== null,
+            ));
+            if ($delegationIds !== []) {
+                $database->query('DELETE FROM decision_delegations WHERE id IN (?)', $delegationIds);
             }
             foreach ($opportunityIds as $opportunityId) {
                 $database->query('DELETE b FROM assessment_breakdowns b INNER JOIN assessments a ON a.id = b.assessment_id WHERE a.opportunity_id = ?', $opportunityId);
@@ -203,5 +297,19 @@ final class DecisionDelegationServiceTest extends TestCase
                 $database->query('DELETE FROM users WHERE id = ?', $userId);
             }
         }
+    }
+
+    private static function json(object $response): JsonApiResponse
+    {
+        self::assertInstanceOf(JsonApiResponse::class, $response);
+        return $response;
+    }
+
+    /** @return array<string, mixed> */
+    private static function payload(JsonApiResponse $response): array
+    {
+        $payload = $response->getPayload();
+        self::assertIsArray($payload);
+        return $payload;
     }
 }

@@ -100,6 +100,7 @@ final class DecisionDelegationService
             $this->assertAssessedScope($scopeIds, $profileId, $ruleSetId);
 
             $changed = 0;
+            $results = [];
             foreach ($items as $item) {
                 $result = $this->decisions->setAssistantDecision(
                     $userId,
@@ -111,6 +112,7 @@ final class DecisionDelegationService
                     $delegationId,
                 );
                 $changed += (int) $result->changed;
+                $results[$item->opportunityId] = $result;
             }
             $summary = ['processed' => count($items), 'changed' => $changed];
             $this->database->query('UPDATE decision_delegations SET', [
@@ -123,7 +125,7 @@ final class DecisionDelegationService
                 'processed' => count($items),
                 'changed' => $changed,
             ]);
-            return new DecisionBatchResult($delegationId, count($items), $changed);
+            return new DecisionBatchResult($delegationId, count($items), $changed, $results);
         });
     }
 

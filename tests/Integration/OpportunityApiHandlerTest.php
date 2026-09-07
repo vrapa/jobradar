@@ -86,47 +86,14 @@ final class OpportunityApiHandlerTest extends TestCase
                 'decision' => 'react',
                 'idempotency_key' => 'decision-' . $unique,
             ];
-            $decision = self::json($setDecision->handle(['id' => $opportunityId, 'body' => $decisionBody]));
-            self::assertSame(200, $decision->getCode());
-            $decisionPayload = self::payload($decision);
-            self::assertSame('react', $decisionPayload['data']['decision']);
-            self::assertSame(1, $decisionPayload['data']['lock_version']);
-            self::assertFalse($decisionPayload['data']['application_submitted']);
-            self::assertSame('none', $database->fetchField(
-                'SELECT workflow_status FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
-                $userId,
-                $opportunityId,
-            ));
-            self::assertSame('assistant', $database->fetchField(
-                'SELECT actor_type FROM opportunity_decision_history WHERE user_id = ? AND opportunity_id = ?',
-                $userId,
-                $opportunityId,
-            ));
-
-            $replayed = self::json($setDecision->handle(['id' => $opportunityId, 'body' => $decisionBody]));
-            self::assertEquals($decisionPayload, self::payload($replayed));
-            self::assertSame(1, (int) $database->fetchField(
-                'SELECT COUNT(*) FROM opportunity_decision_history WHERE user_id = ? AND opportunity_id = ?',
-                $userId,
-                $opportunityId,
-            ));
-
-            $reusedKey = $decisionBody;
-            $reusedKey['decision'] = 'undecided';
             self::assertSame(422, self::json($setDecision->handle([
                 'id' => $opportunityId,
-                'body' => $reusedKey,
+                'body' => $decisionBody,
             ]))->getCode());
-
-            $stale = $decisionBody;
-            $stale['idempotency_key'] = 'stale-decision-' . $unique;
-            self::assertSame(409, self::json($setDecision->handle([
-                'id' => $opportunityId,
-                'body' => $stale,
-            ]))->getCode());
-            self::assertSame(2, (int) $database->fetchField(
-                'SELECT COUNT(*) FROM assistant_actions WHERE client_identifier = ?',
-                'synthetic-opportunity-client',
+            self::assertSame(0, (int) $database->fetchField(
+                'SELECT COUNT(*) FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
+                $userId,
+                $opportunityId,
             ));
 
             $invalid = self::json($import->handle(['body' => $body + ['unexpected' => 'value']]));
