@@ -66,6 +66,10 @@ final class Bootstrap
                 'user' => getenv('DB_USER') ?: 'jobradar',
                 'password' => getenv('DB_PASSWORD') ?: '',
             ],
+            'runner' => [
+                'apiUrl' => getenv('JOBRADAR_RUNNER_API_URL') ?: rtrim((string) (getenv('APP_URL') ?: 'http://localhost'), '/') . '/api/v1',
+                'token' => getenv('JOBRADAR_RUNNER_TOKEN') ?: '',
+            ],
         ]);
         $configurator->addConfig($this->rootDirectory . '/config/common.neon');
         $configurator->addConfig($this->rootDirectory . '/config/services.neon');

@@ -14,6 +14,14 @@ services:
 	- App\Console\ImportAssessmentConfigurationCommand
 	- App\Console\ImportAssessmentCommand
 	- App\Console\CreateApiClientCommand
+	- App\Runner\FakeSourceAdapter
+	runnerHttpClient:
+		factory: App\Runner\CurlRunnerHttpClient
+	runWorkerOnceCommand:
+		factory: App\Console\RunWorkerOnceCommand
+		arguments:
+			apiUrl: %runner.apiUrl%
+			token: %runner.token%
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\OpportunityQueryService
