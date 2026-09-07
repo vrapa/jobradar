@@ -51,6 +51,7 @@ services:
 	- App\Api\V1\GetOpportunityHandler
 	- App\Api\V1\ImportOpportunityHandler
 	- App\Api\V1\SetOpportunityDecisionHandler
+	- App\Api\V1\SaveOpportunityAssessmentHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
 	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
@@ -82,6 +83,10 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'decisions:write'
+	assessmentsWriteApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'assessments:write'
 	apiDecider:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
@@ -98,3 +103,4 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'opportunities', 'detail'), 'App\Api\V1\GetOpportunityHandler', @opportunitiesReadApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'opportunities', 'import'), 'App\Api\V1\ImportOpportunityHandler', @opportunitiesImportApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('PUT', '1', 'opportunities', 'decision'), 'App\Api\V1\SetOpportunityDecisionHandler', @decisionsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'opportunities', 'assessment'), 'App\Api\V1\SaveOpportunityAssessmentHandler', @assessmentsWriteApiAuthorization)

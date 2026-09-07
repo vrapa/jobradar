@@ -60,6 +60,10 @@ final class RouterFactory
             ...$opportunityApi,
             'apiAction' => 'decision',
         ]);
+        $router->addRoute('api/v1/opportunities/<id \d+>/assessments', [
+            ...$opportunityApi,
+            'apiAction' => 'assessment',
+        ]);
         $router->addRoute('api/v1/opportunities/<id \d+>', [...$opportunityApi, 'apiAction' => 'detail']);
         $router->addRoute('api/v<version>/<package>[/<apiAction>]', 'Api:Api:default');
         $router->addRoute('prihlaseni', 'Sign:in');

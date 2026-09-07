@@ -14,7 +14,7 @@ final class AssistantActionService
     {
     }
 
-    /** @param array<string, scalar|null> $request */
+    /** @param array<string, mixed> $request */
     public function reserve(
         ApiIdentity $identity,
         string $idempotencyKey,
@@ -128,11 +128,24 @@ final class AssistantActionService
         );
     }
 
-    /** @param array<string, scalar|null> $request */
+    /** @param array<string, mixed> $request */
     private static function hashRequest(array $request): string
     {
-        ksort($request);
-        return hash('sha256', json_encode($request, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        return hash('sha256', json_encode(self::canonicalize($request), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private static function canonicalize(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+        if (!array_is_list($value)) {
+            ksort($value);
+        }
+        foreach ($value as $key => $item) {
+            $value[$key] = self::canonicalize($item);
+        }
+        return $value;
     }
 
     /** @return array<string, mixed> */
