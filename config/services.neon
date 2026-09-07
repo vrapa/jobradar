@@ -45,6 +45,10 @@ services:
 	- App\Api\V1\ClaimRunnerLeaseHandler
 	- App\Api\V1\RenewRunnerLeaseHandler
 	- App\Api\V1\RecordSourceProgressHandler
+	- App\Api\V1\OpportunityTransformer
+	- App\Api\V1\ListOpportunitiesHandler
+	- App\Api\V1\GetOpportunityHandler
+	- App\Api\V1\ImportOpportunityHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
 	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
@@ -64,6 +68,14 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'search:write'
+	opportunitiesReadApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'opportunities:read'
+	opportunitiesImportApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'opportunities:import'
 	apiDecider:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
@@ -76,3 +88,6 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'lease'), 'App\Api\V1\ClaimRunnerLeaseHandler', @runnerWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'renew-lease'), 'App\Api\V1\RenewRunnerLeaseHandler', @runnerWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-runs', 'progress'), 'App\Api\V1\RecordSourceProgressHandler', @runnerWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'opportunities'), 'App\Api\V1\ListOpportunitiesHandler', @opportunitiesReadApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'opportunities', 'detail'), 'App\Api\V1\GetOpportunityHandler', @opportunitiesReadApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'opportunities', 'import'), 'App\Api\V1\ImportOpportunityHandler', @opportunitiesImportApiAuthorization)
