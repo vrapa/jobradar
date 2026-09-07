@@ -12,7 +12,9 @@ parameters:
 
 application:
 	errorPresenter: Error
-	mapping: App\Presentation\*\**Presenter
+	mapping:
+		*: App\Presentation\*\**Presenter
+		Api: Tomaj\NetteApi\Presenters\*Presenter
 
 database:
 	dsn: 'mysql:host=%database.host%;port=%database.port%;dbname=%database.name%;charset=utf8mb4'

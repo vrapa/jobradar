@@ -6,6 +6,7 @@ namespace Tests\Integration;
 
 use App\Api\Auth\ApiAuthenticationException;
 use App\Api\Auth\ApiCredentialService;
+use App\Api\Auth\ScopedBearerAuthorization;
 use App\Bootstrap;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
@@ -58,6 +59,16 @@ final class ApiCredentialServiceTest extends TestCase
             self::assertTrue($identity->hasScope('opportunities:read'));
             self::assertNotNull($database->fetchField('SELECT last_used_at FROM api_access_tokens WHERE id = ?', $tokenId));
 
+            $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $issue->token;
+            $authorization = new ScopedBearerAuthorization($credentials, 'sources:read');
+            self::assertTrue($authorization->authorized());
+            $wrongScopeAuthorization = new ScopedBearerAuthorization($credentials, 'search:control');
+            self::assertFalse($wrongScopeAuthorization->authorized());
+            self::assertSame(
+                'API token není platný nebo nemá požadované oprávnění.',
+                $wrongScopeAuthorization->getErrorMessage(),
+            );
+
             try {
                 $credentials->authenticate($issue->token, 'search:control');
                 self::fail('Token bez požadovaného scope nesmí být přijat.');
@@ -70,6 +81,7 @@ final class ApiCredentialServiceTest extends TestCase
             $this->expectException(ApiAuthenticationException::class);
             $credentials->authenticate($issue->token, 'sources:read');
         } finally {
+            unset($_SERVER['HTTP_AUTHORIZATION']);
             if ($tokenId !== null) {
                 $database->query('DELETE FROM api_access_tokens WHERE id = ?', $tokenId);
             }

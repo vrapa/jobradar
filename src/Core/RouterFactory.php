@@ -14,6 +14,7 @@ final class RouterFactory
     public static function createRouter(): RouteList
     {
         $router = new RouteList();
+        $router->addRoute('api/v<version>/<package>[/<apiAction>]', 'Api:Api:default');
         $router->addRoute('prihlaseni', 'Sign:in');
         $router->addRoute('zdroje', 'Source:default');
         $router->addRoute('kontroly/<id \d+>', 'SearchRequest:detail');

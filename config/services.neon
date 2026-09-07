@@ -31,3 +31,19 @@ services:
 	- App\Search\SearchRunService
 	- App\Search\SearchRequestControlService
 	- App\Api\Auth\ApiCredentialService
+	- App\Api\V1\SourcesHandler
+	- Tomaj\NetteApi\Misc\IpDetector
+	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
+	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
+	apiPresenter:
+		factory: Tomaj\NetteApi\Presenters\ApiPresenter
+		setup:
+			- setCorsHeader('off')
+	sourcesApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'sources:read'
+	apiDecider:
+		factory: Tomaj\NetteApi\ApiDecider
+		setup:
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'sources'), 'App\Api\V1\SourcesHandler', @sourcesApiAuthorization)
