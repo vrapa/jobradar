@@ -29,3 +29,4 @@ services:
 	- App\Search\SourceQueryService
 	- App\Search\RunnerLeaseService
 	- App\Search\SearchRunService
+	- App\Search\SearchRequestControlService
