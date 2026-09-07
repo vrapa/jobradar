@@ -1,0 +1,19 @@
+{
+  "profile": {
+    "name": "Synthetic candidate profile",
+    "version": 1,
+    "description": "Public synthetic fixture without personal data.",
+    "parameters": {
+      "preferredStack": ["PHP"],
+      "location": "Example"
+    }
+  },
+  "ruleSet": {
+    "name": "Synthetic draft rules",
+    "version": 1,
+    "description": "Draft fixture without an approved financial curve.",
+    "rules": {
+      "financialCurveApproved": false
+    }
+  }
+}
