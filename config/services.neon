@@ -26,3 +26,4 @@ services:
 	- App\Assessment\AssessmentConfigurationService
 	- App\Assessment\AssessmentPayloadMapper
 	- App\Search\SearchRequestService
+	- App\Search\SourceQueryService

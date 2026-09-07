@@ -6,6 +6,7 @@ namespace Tests\Integration;
 
 use App\Bootstrap;
 use App\Search\SearchRequestService;
+use App\Search\SourceQueryService;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 
@@ -19,6 +20,7 @@ final class SearchRequestServiceTest extends TestCase
         $container = (new Bootstrap(dirname(__DIR__, 2)))->bootConsole();
         $database = $container->getByType(Connection::class);
         $service = $container->getByType(SearchRequestService::class);
+        $queries = $container->getByType(SourceQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = null;
         $sourceIds = [];
@@ -74,6 +76,13 @@ final class SearchRequestServiceTest extends TestCase
                 'SELECT COUNT(*) FROM search_runs WHERE search_request_id = ?',
                 $requestId,
             ));
+            $checkableIds = array_map(static fn ($source): int => $source->id, $queries->activeCheckableSources());
+            self::assertContains($sourceIds[0], $checkableIds);
+            self::assertContains($sourceIds[1], $checkableIds);
+            $recent = $queries->recentRequests($userId);
+            self::assertCount(1, $recent);
+            self::assertSame($requestId, $recent[0]->id);
+            self::assertSame(2, $recent[0]->sourceCount);
 
             try {
                 $service->request($userId, [$sourceIds[0]], $key);

@@ -1,0 +1,62 @@
+{block title}Zdroje a kontroly{/block}
+
+{block content}
+<header class="mb-4">
+    <p class="text-uppercase text-primary fw-semibold small mb-1">Výslovně spouštěné kontroly</p>
+    <h1 class="display-6 fw-bold">Zdroje</h1>
+    <p class="lead text-body-secondary">Požadavek pouze čeká na místní runner. Zdroj se označí jako zkontrolovaný až po skutečném průchodu.</p>
+</header>
+
+<div class="row g-4">
+    <div class="col-12 col-xl-7">
+        <section class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5">Spustit kontrolu</h2>
+                {if count($sources) === 0}
+                    <div class="alert alert-info mb-0">Zatím není nakonfigurovaný žádný aktivní zdroj podporující kontrolu. Interní zdroj ručního importu se zde záměrně nenabízí.</div>
+                {else}
+                    {form searchRequestForm}
+                        <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+                        <fieldset>
+                            <legend class="h6">Vyberte zdroje</legend>
+                            <div class="vstack gap-2 mb-3">
+                                <label n:foreach="$form[sources]->items as $key => $label" class="form-check card p-3">
+                                    <input n:name="sources:$key" class="form-check-input"> <span class="form-check-label">{$label}</span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <button n:name="send" class="btn btn-primary">Spustit vybranou kontrolu</button>
+                    {/form}
+                {/if}
+            </div>
+        </section>
+
+        <section class="mt-4" aria-labelledby="source-list-title">
+            <h2 id="source-list-title" class="h5">Aktivní zdroje</h2>
+            <div class="vstack gap-2">
+                <article n:foreach="$sources as $source" class="card shadow-sm"><div class="card-body">
+                    <div class="d-flex justify-content-between gap-3">
+                        <div><h3 class="h6 mb-1">{$source->name}</h3><div class="small text-body-secondary">Priorita {$source->priority}{if $source->marketCode !== null} · {$source->marketCode}{/if}</div></div>
+                        <span class="badge {$source->accessStatus === 'available' ? 'text-bg-success' : ($source->interventionRequired ? 'text-bg-warning' : 'text-bg-light border')}">{$source->accessStatus === 'unknown' ? 'Přístup neověřen' : $source->accessStatus}</span>
+                    </div>
+                    <a href="{$source->url}" rel="noopener noreferrer" target="_blank" class="small">Otevřít zdroj</a>
+                    <span n:if="$source->recommendedFrequencyHours !== null" class="small text-body-secondary ms-2">Doporučeno po {$source->recommendedFrequencyHours} h</span>
+                </div></article>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-12 col-xl-5">
+        <section class="card shadow-sm"><div class="card-body">
+            <h2 class="h5">Poslední požadavky</h2>
+            <p n:if="count($recentRequests) === 0" class="text-body-secondary mb-0">Zatím nebyla vyžádána žádná kontrola.</p>
+            <div n:if="count($recentRequests) > 0" class="list-group list-group-flush">
+                <div n:foreach="$recentRequests as $request" class="list-group-item px-0">
+                    <div class="d-flex justify-content-between gap-2"><strong>Kontrola #{$request->id}</strong><span class="badge text-bg-light border">{$request->status}</span></div>
+                    <div class="small text-body-secondary">{$request->sourceCount} zdrojů · {$request->requestedAt|date:'j. n. Y H:i'}</div>
+                </div>
+            </div>
+        </div></section>
+    </div>
+</div>
+{/block}
