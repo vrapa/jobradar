@@ -1,0 +1,20 @@
+{
+  "name": "jobradar",
+  "private": true,
+  "scripts": {
+    "build": "npm run build:css && npm run build:js",
+    "build:css": "sass --load-path=node_modules --quiet-deps --silence-deprecation=import --no-source-map --style=compressed assets/scss/app.scss public/assets/app.css",
+    "build:js": "esbuild assets/js/app.js --bundle --minify --format=esm --outfile=public/assets/app.js",
+    "watch:css": "sass --load-path=node_modules --quiet-deps --silence-deprecation=import --watch assets/scss/app.scss public/assets/app.css",
+    "watch:js": "esbuild assets/js/app.js --bundle --format=esm --outfile=public/assets/app.js --watch"
+  },
+  "dependencies": {
+    "@popperjs/core": "^2.11.8",
+    "bootstrap": "^5.3.8",
+    "naja": "^3.2.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9",
+    "sass": "1.92.1"
+  }
+}

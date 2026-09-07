@@ -1,0 +1,14 @@
+/.env
+/.env.local
+/.composer-home/
+/.idea/
+/.phpstan-cache/
+/.phpunit.cache/
+/node_modules/
+/vendor/
+/var/*
+!/var/.gitignore
+!/var/log/
+!/var/log/.gitignore
+!/var/temp/
+!/var/temp/.gitignore

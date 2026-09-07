@@ -1,0 +1,12 @@
+services:
+	router: App\Core\RouterFactory::createRouter
+	- App\Security\DatabaseAuthenticator
+	- App\Security\LoginRateLimiter
+	- App\Security\PasswordPolicy
+	- App\Infrastructure\AuditLogger
+	migrationRunner:
+		factory: App\Infrastructure\MigrationRunner
+		arguments:
+			migrationDirectory: %appDir%/../migrations
+	- App\Console\MigrateCommand
+	- App\Console\CreateAdminCommand

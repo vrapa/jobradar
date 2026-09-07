@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Bootstrap;
+use App\Console\CreateAdminCommand;
+use App\Console\MigrateCommand;
+use Symfony\Component\Console\Application;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$container = (new Bootstrap(dirname(__DIR__)))->bootConsole();
+$application = new Application('JobRadar', '0.1.0-dev');
+$application->add($container->getByType(MigrateCommand::class));
+$application->add($container->getByType(CreateAdminCommand::class));
+$application->run();

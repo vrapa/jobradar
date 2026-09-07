@@ -1,0 +1,36 @@
+parameters:
+	app:
+		environment: production
+		url: http://localhost
+		timezone: Europe/Prague
+	database:
+		host: db
+		port: 3306
+		name: jobradar
+		user: jobradar
+		password: ''
+
+application:
+	errorPresenter: Error
+	mapping: App\Presentation\*\**Presenter
+
+database:
+	dsn: 'mysql:host=%database.host%;port=%database.port%;dbname=%database.name%;charset=utf8mb4'
+	user: %database.user%
+	password: %database.password%
+	options:
+		lazy: true
+		charset: utf8mb4
+		newDateTime: true
+
+latte:
+	strictParsing: true
+
+session:
+	expiration: 14 days
+	name: JOBRADARSESSID
+
+di:
+	export:
+		parameters: false
+		tags: false

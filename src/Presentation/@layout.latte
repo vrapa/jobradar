@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{ifset title}{include title} · {/ifset}JobRadar</title>
+    <link rel="stylesheet" href="{$basePath}/assets/app.css">
+</head>
+<body>
+    <a class="visually-hidden-focusable position-absolute top-0 start-0 p-3 bg-white" href="#main-content">Přeskočit na obsah</a>
+    <nav n:if="$user->isLoggedIn()" class="navbar navbar-expand bg-dark navbar-dark" aria-label="Hlavní navigace">
+        <div class="container-xl">
+            <a class="navbar-brand fw-semibold" n:href="Home:">JobRadar</a>
+            <div class="ms-auto d-flex align-items-center gap-3">
+                <span class="navbar-text d-none d-sm-inline">{$user->identity->displayName}</span>
+                {form signOutForm, class: 'm-0'}
+                    <button n:name="send" class="btn btn-sm btn-outline-light">Odhlásit</button>
+                {/form}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-xl py-4">
+        <div n:foreach="$flashes as $flash" class="alert alert-{$flash->type === 'success' ? 'success' : 'info'}" role="status">
+            {$flash->message}
+        </div>
+        <main id="main-content">
+            {include content}
+        </main>
+    </div>
+    <script type="module" src="{$basePath}/assets/app.js"></script>
+</body>
+</html>

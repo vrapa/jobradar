@@ -1,0 +1,28 @@
+{block title}Přihlášení{/block}
+
+{block content}
+<div class="auth-shell py-md-5">
+    <section class="card border-0 shadow-lg">
+        <div class="card-body p-4 p-md-5">
+            <p class="text-uppercase text-primary fw-semibold small mb-2">JobRadar</p>
+            <h1 class="h2 mb-2">Přihlášení</h1>
+            <p class="text-body-secondary mb-4">Přístup k nabídkám a rozhodnutím je soukromý.</p>
+
+            {form signInForm, class: 'vstack gap-3'}
+                <div n:if="$form->hasErrors()" class="alert alert-danger mb-0" role="alert">
+                    <div n:foreach="$form->getErrors() as $error">{$error}</div>
+                </div>
+                <div>
+                    <label n:name="email" class="form-label">E-mail</label>
+                    <input n:name="email" class="form-control form-control-lg" autofocus>
+                </div>
+                <div>
+                    <label n:name="password" class="form-label">Heslo</label>
+                    <input n:name="password" class="form-control form-control-lg">
+                </div>
+                <button n:name="send" class="btn btn-primary btn-lg w-100">Přihlásit se</button>
+            {/form}
+        </div>
+    </section>
+</div>
+{/block}
