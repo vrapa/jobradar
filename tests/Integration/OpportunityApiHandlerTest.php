@@ -9,6 +9,7 @@ use App\Api\Auth\ApiRequestContext;
 use App\Api\V1\GetOpportunityHandler;
 use App\Api\V1\ImportOpportunityHandler;
 use App\Api\V1\ListOpportunitiesHandler;
+use App\Api\V1\SetOpportunityDecisionHandler;
 use App\Bootstrap;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
@@ -27,6 +28,7 @@ final class OpportunityApiHandlerTest extends TestCase
         $import = $container->getByType(ImportOpportunityHandler::class);
         $list = $container->getByType(ListOpportunitiesHandler::class);
         $get = $container->getByType(GetOpportunityHandler::class);
+        $setDecision = $container->getByType(SetOpportunityDecisionHandler::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $opportunityId = null;
         $companyName = 'Synthetic API company ' . $unique;
@@ -76,11 +78,62 @@ final class OpportunityApiHandlerTest extends TestCase
                 (string) $opportunityId,
             ));
 
+            $decisionBody = [
+                'expected_lock_version' => 0,
+                'decision' => 'react',
+                'idempotency_key' => 'decision-' . $unique,
+            ];
+            $decision = self::json($setDecision->handle(['id' => $opportunityId, 'body' => $decisionBody]));
+            self::assertSame(200, $decision->getCode());
+            $decisionPayload = self::payload($decision);
+            self::assertSame('react', $decisionPayload['data']['decision']);
+            self::assertSame(1, $decisionPayload['data']['lock_version']);
+            self::assertFalse($decisionPayload['data']['application_submitted']);
+            self::assertSame('none', $database->fetchField(
+                'SELECT workflow_status FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
+                $userId,
+                $opportunityId,
+            ));
+            self::assertSame('assistant', $database->fetchField(
+                'SELECT actor_type FROM opportunity_decision_history WHERE user_id = ? AND opportunity_id = ?',
+                $userId,
+                $opportunityId,
+            ));
+
+            $replayed = self::json($setDecision->handle(['id' => $opportunityId, 'body' => $decisionBody]));
+            self::assertEquals($decisionPayload, self::payload($replayed));
+            self::assertSame(1, (int) $database->fetchField(
+                'SELECT COUNT(*) FROM opportunity_decision_history WHERE user_id = ? AND opportunity_id = ?',
+                $userId,
+                $opportunityId,
+            ));
+
+            $reusedKey = $decisionBody;
+            $reusedKey['decision'] = 'undecided';
+            self::assertSame(422, self::json($setDecision->handle([
+                'id' => $opportunityId,
+                'body' => $reusedKey,
+            ]))->getCode());
+
+            $stale = $decisionBody;
+            $stale['idempotency_key'] = 'stale-decision-' . $unique;
+            self::assertSame(409, self::json($setDecision->handle([
+                'id' => $opportunityId,
+                'body' => $stale,
+            ]))->getCode());
+            self::assertSame(2, (int) $database->fetchField(
+                'SELECT COUNT(*) FROM assistant_actions WHERE client_identifier = ?',
+                'synthetic-opportunity-client',
+            ));
+
             $invalid = self::json($import->handle(['body' => $body + ['unexpected' => 'value']]));
             self::assertSame(422, $invalid->getCode());
         } finally {
             $context->clear();
             if (is_int($opportunityId)) {
+                $database->query('DELETE FROM assistant_actions WHERE client_identifier = ?', 'synthetic-opportunity-client');
+                $database->query('DELETE FROM opportunity_decision_history WHERE opportunity_id = ?', $opportunityId);
+                $database->query('DELETE FROM user_opportunity_state WHERE opportunity_id = ?', $opportunityId);
                 $database->query(
                     "DELETE FROM audit_log WHERE JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.opportunity_id')) = ?",
                     (string) $opportunityId,

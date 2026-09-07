@@ -111,6 +111,21 @@ final class OpportunityDecisionServiceTest extends TestCase
             self::assertSame('Nízká sazba', $history[1]->reasonLabel);
             self::assertSame('Syntetická poznámka.', $history[1]->note);
 
+            $assistant = $service->setAssistantDecision(
+                $userId,
+                $opportunityId,
+                3,
+                OpportunityDecision::React,
+            );
+            self::assertSame(4, $assistant->lockVersion);
+            $assistantHistory = $decisionQueries->history($userId, $opportunityId);
+            self::assertSame('assistant', $assistantHistory[0]->actorType);
+            self::assertSame('none', $database->fetchField(
+                'SELECT workflow_status FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
+                $userId,
+                $opportunityId,
+            ));
+
             $this->expectException(OpportunityConflictException::class);
             $service->setManualDecision($userId, $opportunityId, 1, OpportunityDecision::React);
         } finally {

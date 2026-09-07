@@ -30,6 +30,52 @@ final class OpportunityDecisionService
         ?string $reason = null,
         ?string $note = null,
     ): DecisionResult {
+        return $this->setDecision(
+            $userId,
+            $opportunityId,
+            $expectedLockVersion,
+            $decision,
+            $reason,
+            $note,
+            'user',
+            $userId,
+            null,
+        );
+    }
+
+    public function setAssistantDecision(
+        int $userId,
+        int $opportunityId,
+        int $expectedLockVersion,
+        OpportunityDecision $decision,
+        ?string $reason = null,
+        ?string $note = null,
+        ?int $delegationId = null,
+    ): DecisionResult {
+        return $this->setDecision(
+            $userId,
+            $opportunityId,
+            $expectedLockVersion,
+            $decision,
+            $reason,
+            $note,
+            'assistant',
+            null,
+            $delegationId,
+        );
+    }
+
+    private function setDecision(
+        int $userId,
+        int $opportunityId,
+        int $expectedLockVersion,
+        OpportunityDecision $decision,
+        ?string $reason,
+        ?string $note,
+        string $actorType,
+        ?int $actorUserId,
+        ?int $delegationId,
+    ): DecisionResult {
         $reason = $this->normalizeReason($decision, $reason);
         $note = $this->nullable($note);
 
@@ -41,6 +87,9 @@ final class OpportunityDecisionService
             $decision,
             $reason,
             $note,
+            $actorType,
+            $actorUserId,
+            $delegationId,
         ): DecisionResult {
             if (!$this->database->fetchField(
                 'SELECT id FROM opportunities WHERE id = ? AND archived_at IS NULL FOR SHARE',
@@ -101,9 +150,9 @@ final class OpportunityDecisionService
                 'new_decision' => $decision->value,
                 'reason' => $reason,
                 'note' => $note,
-                'actor_type' => 'user',
-                'actor_user_id' => $userId,
-                'delegation_id' => null,
+                'actor_type' => $actorType,
+                'actor_user_id' => $actorUserId,
+                'delegation_id' => $delegationId,
                 'created_at' => $now,
             ]);
             $this->auditLogger->record('opportunity.decision_changed', $userId, [
@@ -112,6 +161,8 @@ final class OpportunityDecisionService
                 'new_decision' => $decision->value,
                 'reason' => $reason,
                 'state_lock_version' => $newLockVersion,
+                'actor_type' => $actorType,
+                'delegation_id' => $delegationId,
             ]);
 
             return new DecisionResult($previous, $decision, $newLockVersion, true);

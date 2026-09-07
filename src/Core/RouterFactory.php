@@ -49,14 +49,18 @@ final class RouterFactory
             'sourceId' => [Route::FILTER_IN => self::publishApiSourceId(...)],
         ];
         $router->addRoute('api/v1/search-runs/<id \d+>/sources/<sourceId \d+>/progress', $runnerProgress);
-        $router->addRoute('api/v1/opportunities/<id \d+>', [
+        $opportunityApi = [
             'presenter' => 'Api:Api',
             'action' => 'default',
             'version' => '1',
             'package' => 'opportunities',
-            'apiAction' => 'detail',
             'id' => [Route::FILTER_IN => self::publishApiId(...)],
+        ];
+        $router->addRoute('api/v1/opportunities/<id \d+>/decision', [
+            ...$opportunityApi,
+            'apiAction' => 'decision',
         ]);
+        $router->addRoute('api/v1/opportunities/<id \d+>', [...$opportunityApi, 'apiAction' => 'detail']);
         $router->addRoute('api/v<version>/<package>[/<apiAction>]', 'Api:Api:default');
         $router->addRoute('prihlaseni', 'Sign:in');
         $router->addRoute('zdroje', 'Source:default');

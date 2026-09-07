@@ -34,6 +34,7 @@ services:
 	- App\Search\RunnerDeviceService
 	- App\Api\Auth\ApiCredentialService
 	- App\Api\Auth\ApiRequestContext
+	- App\Api\AssistantActionService
 	- App\Api\V1\SourcesHandler
 	- App\Api\V1\SourceTransformer
 	- App\Api\V1\LoginRequiredSourcesHandler
@@ -49,6 +50,7 @@ services:
 	- App\Api\V1\ListOpportunitiesHandler
 	- App\Api\V1\GetOpportunityHandler
 	- App\Api\V1\ImportOpportunityHandler
+	- App\Api\V1\SetOpportunityDecisionHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
 	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
@@ -76,6 +78,10 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'opportunities:import'
+	decisionsWriteApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'decisions:write'
 	apiDecider:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
@@ -91,3 +97,4 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'opportunities'), 'App\Api\V1\ListOpportunitiesHandler', @opportunitiesReadApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'opportunities', 'detail'), 'App\Api\V1\GetOpportunityHandler', @opportunitiesReadApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'opportunities', 'import'), 'App\Api\V1\ImportOpportunityHandler', @opportunitiesImportApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('PUT', '1', 'opportunities', 'decision'), 'App\Api\V1\SetOpportunityDecisionHandler', @decisionsWriteApiAuthorization)
