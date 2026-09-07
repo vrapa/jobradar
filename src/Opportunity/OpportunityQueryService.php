@@ -28,24 +28,39 @@ final class OpportunityQueryService
     }
 
     /** @return list<OpportunitySummary> */
-    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting): array
+    public function listReactionQueue(int $userId): array
+    {
+        return $this->listByDecisionVisibility($userId, false, true);
+    }
+
+    /** @return list<OpportunitySummary> */
+    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting, bool $onlyReactionQueue = false): array
     {
         $rows = $this->database->fetchAll(
             'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
                     v.original_title, v.translated_title, v.summary, v.incomplete,
-                    COALESCE(state.decision, ?) AS decision
+                    COALESCE(state.decision, ?) AS decision, COALESCE(state.workflow_status, ?) AS workflow_status
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
              WHERE o.archived_at IS NULL
-               AND ((? = 1 AND state.decision = ?) OR (? = 0 AND COALESCE(state.decision, ?) <> ?))
+               AND (
+                    (? = 1 AND state.decision = ?)
+                    OR (? = 0 AND ? = 1 AND state.decision = ?)
+                    OR (? = 0 AND ? = 0 AND COALESCE(state.decision, ?) <> ?)
+               )
              ORDER BY o.found_at DESC, o.id DESC',
             OpportunityDecision::Undecided->value,
+            'none',
             $userId,
             $onlyUninteresting,
             OpportunityDecision::Uninteresting->value,
             $onlyUninteresting,
+            $onlyReactionQueue,
+            OpportunityDecision::React->value,
+            $onlyUninteresting,
+            $onlyReactionQueue,
             OpportunityDecision::Undecided->value,
             OpportunityDecision::Uninteresting->value,
         );
@@ -60,6 +75,7 @@ final class OpportunityQueryService
                 incomplete: (bool) $row['incomplete'],
                 foundAt: self::dateTime($row['found_at']),
                 decision: OpportunityDecision::from((string) $row['decision']),
+                workflowStatus: (string) $row['workflow_status'],
             ),
             $rows,
         );

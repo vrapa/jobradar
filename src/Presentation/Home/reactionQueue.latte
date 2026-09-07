@@ -1,0 +1,28 @@
+{block title}K reakci{/block}
+
+{block content}
+<header class="mb-4">
+    <p class="text-uppercase text-primary fw-semibold small mb-1">Interní přípravná fronta</p>
+    <h1 class="display-6 fw-bold">K reakci</h1>
+    <p class="lead text-body-secondary">Rozhodnutí zde nic neodeslalo. Každá žádost bude mít později samostatný auditovaný krok s výslovným potvrzením.</p>
+</header>
+
+<div n:if="$opportunityCount === 0" class="card shadow-sm"><div class="card-body py-5 text-center">
+    <h2 class="h4">Fronta je prázdná</h2>
+    <p class="text-body-secondary">Nabídku sem zařadíte rozhodnutím „Reagovat“ na jejím detailu.</p>
+    <a n:href="Home:" class="btn btn-outline-primary">Procházet nabídky</a>
+</div></div>
+
+<div n:if="$opportunityCount > 0" class="row g-3">
+    <div n:foreach="$opportunities as $opportunity" class="col-12 col-lg-6">
+        <article class="card h-100 shadow-sm border-success-subtle"><div class="card-body">
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="badge text-bg-success">K reakci</span>
+                <span class="small text-body-secondary">Workflow: {$opportunity->workflowStatus}</span>
+            </div>
+            <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id" class="stretched-link text-decoration-none">{$opportunity->title}</a></h2>
+            <p class="text-body-secondary mb-0">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>
+        </div></article>
+    </div>
+</div>
+{/block}

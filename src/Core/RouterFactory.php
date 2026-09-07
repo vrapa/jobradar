@@ -16,6 +16,7 @@ final class RouterFactory
         $router = new RouteList();
         $router->addRoute('prihlaseni', 'Sign:in');
         $router->addRoute('nabidky/pridat', 'OpportunityImport:default');
+        $router->addRoute('nabidky/k-reakci', 'Home:reactionQueue');
         $router->addRoute('nabidky/nezajimave', 'Home:uninteresting');
         $router->addRoute('nabidky/<id \d+>/podminky', 'OpportunityTerms:default');
         $router->addRoute('nabidky/<id \d+>', 'Opportunity:detail');

@@ -31,4 +31,13 @@ final class HomePresenter extends SecuredPresenter
             'opportunityCount' => count($items),
         ]);
     }
+
+    public function renderReactionQueue(): void
+    {
+        $items = $this->opportunities->listReactionQueue((int) $this->getUser()->getId());
+        $this->template->setParameters([
+            'opportunities' => $items,
+            'opportunityCount' => count($items),
+        ]);
+    }
 }

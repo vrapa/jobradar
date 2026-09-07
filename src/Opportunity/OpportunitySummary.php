@@ -17,6 +17,7 @@ final readonly class OpportunitySummary
         public bool $incomplete,
         public \DateTimeInterface $foundAt,
         public OpportunityDecision $decision,
+        public string $workflowStatus,
     ) {
     }
 }

@@ -54,6 +54,10 @@ final class OpportunityDecisionServiceTest extends TestCase
             self::assertSame(1, $react->lockVersion);
             self::assertTrue($react->changed);
             self::assertTrue($this->listContains($queries, $userId, $opportunityId));
+            self::assertTrue(array_any(
+                $queries->listReactionQueue($userId),
+                static fn ($item): bool => $item->id === $opportunityId && $item->workflowStatus === 'none',
+            ));
             self::assertSame('none', $database->fetchField(
                 'SELECT workflow_status FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
                 $userId,
@@ -73,6 +77,10 @@ final class OpportunityDecisionServiceTest extends TestCase
             );
             self::assertSame(2, $hidden->lockVersion);
             self::assertFalse($this->listContains($queries, $userId, $opportunityId));
+            self::assertFalse(array_any(
+                $queries->listReactionQueue($userId),
+                static fn ($item): bool => $item->id === $opportunityId,
+            ));
             self::assertTrue(array_any(
                 $queries->listUninteresting($userId),
                 static fn ($item): bool => $item->id === $opportunityId,
