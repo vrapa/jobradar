@@ -9,6 +9,7 @@ use App\Search\RunnerLeaseService;
 use App\Search\SearchRequestControlService;
 use App\Search\SearchRequestService;
 use App\Search\SearchRunService;
+use App\Search\SourceQueryService;
 use App\Search\SourceRunResult;
 use App\Search\SourceRunScope;
 use Nette\Database\Connection;
@@ -27,6 +28,7 @@ final class SearchRequestControlServiceTest extends TestCase
         $leases = $container->getByType(RunnerLeaseService::class);
         $runs = $container->getByType(SearchRunService::class);
         $controls = $container->getByType(SearchRequestControlService::class);
+        $queries = $container->getByType(SourceQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $sourceId = $deviceId = $requestId = $runId = null;
 
@@ -63,6 +65,15 @@ final class SearchRequestControlServiceTest extends TestCase
                 new SourceRunResult('waiting_for_login', incompleteReason: 'Relace vyžaduje přihlášení.'),
             );
             self::assertSame('waiting_for_login', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
+            $waitingDetail = $queries->getRequestDetail($userId, $requestId);
+            self::assertNotNull($waitingDetail);
+            self::assertTrue($waitingDetail->canResume());
+            self::assertSame(0, $waitingDetail->checkedSourceCount());
+            self::assertCount(1, $waitingDetail->sources);
+            self::assertSame('Přihlášený seznam nabídek.', $waitingDetail->sources[0]->queryText);
+            self::assertTrue($waitingDetail->sources[0]->loginRequired);
+            self::assertNull($waitingDetail->sources[0]->pagesTraversed);
+            self::assertNull($queries->getRequestDetail($userId + 1, $requestId));
             self::assertSame('resume_requested', $controls->requestResume($userId, $requestId));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
 
@@ -83,6 +94,10 @@ final class SearchRequestControlServiceTest extends TestCase
                 $runId,
                 $sourceId,
             ));
+            $cancelledDetail = $queries->getRequestDetail($userId, $requestId);
+            self::assertNotNull($cancelledDetail);
+            self::assertFalse($cancelledDetail->canCancel());
+            self::assertSame('Přihlášený seznam po zásahu uživatele.', $cancelledDetail->sources[0]->queryText);
         } finally {
             if ($runId !== null) {
                 $database->query('DELETE FROM search_run_sources WHERE search_run_id = ?', $runId);

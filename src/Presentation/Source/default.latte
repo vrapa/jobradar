@@ -51,10 +51,10 @@
             <h2 class="h5">Poslední požadavky</h2>
             <p n:if="count($recentRequests) === 0" class="text-body-secondary mb-0">Zatím nebyla vyžádána žádná kontrola.</p>
             <div n:if="count($recentRequests) > 0" class="list-group list-group-flush">
-                <div n:foreach="$recentRequests as $request" class="list-group-item px-0">
+                <a n:foreach="$recentRequests as $request" n:href="SearchRequest:detail $request->id" class="list-group-item list-group-item-action px-0">
                     <div class="d-flex justify-content-between gap-2"><strong>Kontrola #{$request->id}</strong><span class="badge text-bg-light border">{$request->status}</span></div>
                     <div class="small text-body-secondary">{$request->sourceCount} zdrojů · {$request->requestedAt|date:'j. n. Y H:i'}</div>
-                </div>
+                </a>
             </div>
         </div></section>
     </div>

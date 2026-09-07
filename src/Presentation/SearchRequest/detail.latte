@@ -1,0 +1,87 @@
+{block title}Kontrola #{$request->id}{/block}
+
+{block content}
+<nav aria-label="Drobečková navigace" class="mb-3">
+    <a n:href="Source:" class="text-decoration-none">Zdroje a kontroly</a>
+    <span class="text-body-secondary mx-2" aria-hidden="true">/</span>
+    <span aria-current="page">Kontrola #{$request->id}</span>
+</nav>
+
+<header class="mb-4">
+    <div class="d-flex flex-wrap gap-2 mb-2">
+        <span class="badge text-bg-light border">{$request->status}</span>
+        <span class="badge text-bg-primary">{$request->checkedSourceCount()} z {count($request->sources)} úplně zkontrolováno</span>
+    </div>
+    <h1 class="display-6 fw-bold">Kontrola #{$request->id}</h1>
+    <p class="lead text-body-secondary">Plánovaný zdroj není považován za zkontrolovaný, dokud runner neuloží skutečný úplný průchod a jeho počty.</p>
+</header>
+
+<section n:if="$request->canResume() || $request->canCancel()" class="card shadow-sm mb-4 border-warning-subtle" aria-labelledby="control-title">
+    <div class="card-body">
+        <h2 id="control-title" class="h5">Ovládání kontroly</h2>
+        <p n:if="$request->canResume()" class="text-body-secondary">Nejprve se přihlaste přímo na portálu v místním prohlížeči. JobRadar nepřebírá ani neukládá heslo, cookie nebo MFA kód.</p>
+        {form controlForm}
+            <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+            <div class="d-flex flex-wrap gap-2">
+                <button n:if="$request->canResume()" n:name="resume" class="btn btn-warning">Ověřit přihlášení a pokračovat</button>
+                <button n:if="$request->canCancel()" n:name="cancel" class="btn btn-outline-danger">Zrušit kontrolu</button>
+            </div>
+        {/form}
+    </div>
+</section>
+
+<section class="card shadow-sm mb-4" aria-labelledby="summary-title">
+    <div class="card-body">
+        <h2 id="summary-title" class="h5">Souhrn běhu</h2>
+        <div class="row g-3">
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Vyžádáno</div><div>{$request->requestedAt|date:'j. n. Y H:i'}</div></div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Zahájeno</div><div>{$request->startedAt !== null ? ($request->startedAt|date:'j. n. Y H:i') : 'Dosud ne'}</div></div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Dokončeno</div><div>{$request->finishedAt !== null ? ($request->finishedAt|date:'j. n. Y H:i') : 'Dosud ne'}</div></div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Runner</div><div>{$request->runnerName ?? 'Dosud nepřiřazen'}</div></div>
+        </div>
+        <p n:if="$request->completionReason !== null" class="alert alert-secondary mt-3 mb-0 preserve-lines">{$request->completionReason}</p>
+    </div>
+</section>
+
+<section aria-labelledby="sources-title">
+    <h2 id="sources-title" class="h4 mb-3">Plánované zdroje</h2>
+    <div class="vstack gap-3">
+        <article n:foreach="$request->sources as $source" class="card shadow-sm {if $source->loginRequired}border-warning{/if}">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+                    <div><h3 class="h5 mb-1">{$source->sourceName}</h3><span class="small text-body-secondary">Priorita {$source->priority}</span></div>
+                    <div class="d-flex gap-2 align-items-start">
+                        <span class="badge {$source->wasCheckedCompletely() ? 'text-bg-success' : ($source->loginRequired ? 'text-bg-warning' : 'text-bg-light border')}">{$source->status}</span>
+                        <span n:if="!$source->wasStarted()" class="badge text-bg-secondary">Pouze plánováno</span>
+                    </div>
+                </div>
+                <div n:if="$source->loginRequired" class="alert alert-warning">
+                    Zdroj vyžaduje přihlášení uživatele.
+                    <a n:if="$source->loginUrl !== null" href="{$source->loginUrl}" rel="noopener noreferrer" target="_blank" class="alert-link">Otevřít přihlašovací stránku</a>
+                </div>
+                <div class="mb-3">
+                    <div class="small text-body-secondary">Skutečný rozsah průchodu</div>
+                    <div class="preserve-lines">{$source->queryText ?? 'Průchod dosud nebyl zahájen; rozsah není známý.'}</div>
+                    <div n:if="$source->horizonFrom !== null || $source->horizonTo !== null" class="small text-body-secondary mt-1">
+                        Časový horizont: {$source->horizonFrom !== null ? ($source->horizonFrom|date:'j. n. Y H:i') : 'neznámý'} – {$source->horizonTo !== null ? ($source->horizonTo|date:'j. n. Y H:i') : 'neznámý'}
+                    </div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Stránek</div><div class="fw-semibold">{$source->pagesTraversed ?? 'Neznámé'}</div></div>
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Zobrazeno</div><div class="fw-semibold">{$source->displayedCount ?? 'Neznámé'}</div></div>
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Otevřeno detailů</div><div class="fw-semibold">{$source->detailOpenedCount ?? 'Neznámé'}</div></div>
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Nově uloženo</div><div class="fw-semibold">{$source->storedCount ?? 'Neznámé'}</div></div>
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Aktualizováno</div><div class="fw-semibold">{$source->updatedCount ?? 'Neznámé'}</div></div>
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Duplicity</div><div class="fw-semibold">{$source->duplicateCount ?? 'Neznámé'}</div></div>
+                    <div class="col-6 col-md-3"><div class="small text-body-secondary">Odmítnuto</div><div class="fw-semibold">{$source->rejectedCount ?? 'Neznámé'}</div></div>
+                </div>
+                <div n:if="$source->incompleteReason !== null" class="alert alert-secondary mt-3 mb-0 preserve-lines">Důvod nedokončení: {$source->incompleteReason}</div>
+                <div n:if="$source->errorCode !== null" class="small text-danger mt-2">Kód chyby: {$source->errorCode}</div>
+                <div n:if="$source->startedAt !== null" class="small text-body-secondary mt-3">
+                    Zahájeno {$source->startedAt|date:'j. n. Y H:i'}{if $source->finishedAt !== null}, ukončeno {$source->finishedAt|date:'j. n. Y H:i'}{/if}.
+                </div>
+            </div>
+        </article>
+    </div>
+</section>
+{/block}
