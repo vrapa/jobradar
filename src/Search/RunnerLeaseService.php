@@ -22,7 +22,7 @@ final class RunnerLeaseService
     {
         /** @var RunnerLease|null */
         return $this->database->transaction(function () use ($runnerDeviceId): ?RunnerLease {
-            $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            $now = self::now();
             $device = $this->database->fetch(
                 'SELECT id, device_status FROM runner_devices WHERE id = ? AND revoked_at IS NULL FOR UPDATE',
                 $runnerDeviceId,
@@ -100,6 +100,37 @@ final class RunnerLeaseService
         });
     }
 
+    public function renew(int $runnerDeviceId, int $requestId, string $leaseToken): \DateTimeImmutable
+    {
+        /** @var \DateTimeImmutable */
+        return $this->database->transaction(function () use ($runnerDeviceId, $requestId, $leaseToken): \DateTimeImmutable {
+            $now = self::now();
+            $request = $this->database->fetch(
+                'SELECT request_status, runner_device_id, lease_token_hash, lease_expires_at
+                 FROM search_requests WHERE id = ? FOR UPDATE',
+                $requestId,
+            );
+            if (!$request instanceof Row
+                || !in_array((string) $request['request_status'], ['checking_access', 'running'], true)
+                || (int) $request['runner_device_id'] !== $runnerDeviceId
+                || $request['lease_token_hash'] === null
+                || !hash_equals((string) $request['lease_token_hash'], hash('sha256', $leaseToken))
+                || !$request['lease_expires_at'] instanceof \DateTimeInterface
+                || $request['lease_expires_at'] <= $now
+            ) {
+                throw new \InvalidArgumentException('Aktivní lease neexistuje, neodpovídá zařízení nebo vypršel.');
+            }
+            $expiresAt = $now->modify(sprintf('+%d minutes', self::LEASE_MINUTES));
+            $this->database->query('UPDATE search_requests SET lease_expires_at = ? WHERE id = ?', $expiresAt, $requestId);
+            $this->touchDevice($runnerDeviceId, $now);
+            $this->auditLogger->record('search.lease_renewed', null, [
+                'search_request_id' => $requestId,
+                'runner_device_id' => $runnerDeviceId,
+            ]);
+            return $expiresAt;
+        });
+    }
+
     private function touchDevice(int $runnerDeviceId, \DateTimeImmutable $now): void
     {
         $this->database->query(
@@ -108,5 +139,10 @@ final class RunnerLeaseService
             $now,
             $runnerDeviceId,
         );
+    }
+
+    private static function now(): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable(gmdate('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
     }
 }

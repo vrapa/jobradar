@@ -73,6 +73,19 @@ final class RunnerLeaseServiceTest extends TestCase
             self::assertNull($planned['displayed_count']);
             self::assertNull($planned['finished_at']);
             self::assertNull($leases->claimNext($deviceId));
+            $renewedUntil = $leases->renew($deviceId, $requestId, $lease->token);
+            self::assertGreaterThanOrEqual($lease->expiresAt, $renewedUntil);
+            self::assertSame($renewedUntil->format('Y-m-d H:i:s.u'), $database->fetchField(
+                'SELECT DATE_FORMAT(lease_expires_at, ?) FROM search_requests WHERE id = ?',
+                '%Y-%m-%d %H:%i:%s.%f',
+                $requestId,
+            ));
+            try {
+                $leases->renew($deviceId, $requestId, 'wrong-lease-token');
+                self::fail('Cizí lease token nesmí obnovit běh.');
+            } catch (\InvalidArgumentException $exception) {
+                self::assertSame('Aktivní lease neexistuje, neodpovídá zařízení nebo vypršel.', $exception->getMessage());
+            }
 
             $runs->startSource(
                 $requestId,
@@ -104,6 +117,12 @@ final class RunnerLeaseServiceTest extends TestCase
                 $sourceId,
             ));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
+            try {
+                $leases->renew($deviceId, $requestId, $lease->token);
+                self::fail('Dokončený běh nesmí obnovit lease.');
+            } catch (\InvalidArgumentException $exception) {
+                self::assertSame('Aktivní lease neexistuje, neodpovídá zařízení nebo vypršel.', $exception->getMessage());
+            }
         } finally {
             if ($runId !== null) {
                 $database->query('DELETE FROM search_run_sources WHERE search_run_id = ?', $runId);
