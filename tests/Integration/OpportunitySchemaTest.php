@@ -35,14 +35,24 @@ final class OpportunitySchemaTest extends TestCase
     {
         $expected = [
             'companies',
+            'candidate_profiles',
             'duplicate_candidates',
             'opportunities',
+            'opportunity_decision_history',
+            'opportunity_recommendations',
             'opportunity_questions',
             'opportunity_sources',
             'opportunity_terms',
             'source_versions',
             'sources',
+            'scoring_rule_sets',
+            'assessments',
+            'assessment_breakdowns',
+            'assessment_findings',
+            'assistant_actions',
+            'decision_delegations',
             'technology_requirements',
+            'user_opportunity_state',
         ];
         $statement = $this->database->query(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name",

@@ -1,0 +1,202 @@
+CREATE TABLE candidate_profiles (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    description TEXT NOT NULL,
+    parameters_json JSON NOT NULL,
+    valid_from DATETIME(6) NOT NULL,
+    valid_until DATETIME(6) NULL,
+    created_by_user_id BIGINT UNSIGNED NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY candidate_profiles_name_version_unique (name, version),
+    KEY candidate_profiles_validity (valid_from, valid_until),
+    CONSTRAINT candidate_profiles_creator_fk FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT candidate_profiles_version_positive CHECK (version > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE scoring_rule_sets (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'draft',
+    rules_json JSON NOT NULL,
+    description TEXT NOT NULL,
+    created_by_user_id BIGINT UNSIGNED NULL,
+    created_at DATETIME(6) NOT NULL,
+    activated_at DATETIME(6) NULL,
+    archived_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY scoring_rule_sets_name_version_unique (name, version),
+    KEY scoring_rule_sets_status (status),
+    CONSTRAINT scoring_rule_sets_creator_fk FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT scoring_rule_sets_version_positive CHECK (version > 0),
+    CONSTRAINT scoring_rule_sets_status_valid CHECK (status IN ('draft', 'active', 'archived'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE assessments (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    opportunity_id BIGINT UNSIGNED NOT NULL,
+    source_version_id BIGINT UNSIGNED NOT NULL,
+    candidate_profile_id BIGINT UNSIGNED NOT NULL,
+    scoring_rule_set_id BIGINT UNSIGNED NOT NULL,
+    score_min DECIMAL(8,3) NULL,
+    score_max DECIMAL(8,3) NULL,
+    verified_points DECIMAL(8,3) NULL,
+    coverage DECIMAL(4,3) NOT NULL,
+    recommendation VARCHAR(32) NOT NULL,
+    confidence DECIMAL(4,3) NOT NULL,
+    summary TEXT NOT NULL,
+    author_type VARCHAR(32) NOT NULL,
+    author_user_id BIGINT UNSIGNED NULL,
+    model_identifier VARCHAR(255) NULL,
+    created_at DATETIME(6) NOT NULL,
+    superseded_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    KEY assessments_opportunity_current (opportunity_id, superseded_at, created_at),
+    KEY assessments_version (source_version_id),
+    CONSTRAINT assessments_opportunity_fk FOREIGN KEY (opportunity_id) REFERENCES opportunities (id),
+    CONSTRAINT assessments_source_version_fk FOREIGN KEY (source_version_id) REFERENCES source_versions (id),
+    CONSTRAINT assessments_profile_fk FOREIGN KEY (candidate_profile_id) REFERENCES candidate_profiles (id),
+    CONSTRAINT assessments_rules_fk FOREIGN KEY (scoring_rule_set_id) REFERENCES scoring_rule_sets (id),
+    CONSTRAINT assessments_author_fk FOREIGN KEY (author_user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT assessments_score_order CHECK (score_min IS NULL OR score_max IS NULL OR score_min <= score_max),
+    CONSTRAINT assessments_coverage_range CHECK (coverage >= 0 AND coverage <= 1),
+    CONSTRAINT assessments_confidence_range CHECK (confidence >= 0 AND confidence <= 1),
+    CONSTRAINT assessments_recommendation_valid CHECK (recommendation IN ('react', 'uninteresting', 'verify')),
+    CONSTRAINT assessments_author_type_valid CHECK (author_type IN ('user', 'assistant', 'system'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE assessment_breakdowns (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    assessment_id BIGINT UNSIGNED NOT NULL,
+    area VARCHAR(100) NOT NULL,
+    weight DECIMAL(8,3) NULL,
+    score_min DECIMAL(8,3) NULL,
+    score_max DECIMAL(8,3) NULL,
+    evidence TEXT NULL,
+    explanation TEXT NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY assessment_breakdowns_area_unique (assessment_id, area),
+    CONSTRAINT assessment_breakdowns_assessment_fk FOREIGN KEY (assessment_id) REFERENCES assessments (id),
+    CONSTRAINT assessment_breakdowns_score_order CHECK (score_min IS NULL OR score_max IS NULL OR score_min <= score_max)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE assessment_findings (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    assessment_id BIGINT UNSIGNED NOT NULL,
+    finding_type VARCHAR(32) NOT NULL,
+    severity VARCHAR(32) NOT NULL,
+    finding_text TEXT NOT NULL,
+    evidence_reference VARCHAR(500) NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY assessment_findings_type (assessment_id, finding_type),
+    CONSTRAINT assessment_findings_assessment_fk FOREIGN KEY (assessment_id) REFERENCES assessments (id),
+    CONSTRAINT assessment_findings_type_valid CHECK (finding_type IN ('strong_match', 'acceptable_gap', 'blocker', 'question')),
+    CONSTRAINT assessment_findings_severity_valid CHECK (severity IN ('info', 'low', 'medium', 'high', 'critical'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE opportunity_recommendations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    opportunity_id BIGINT UNSIGNED NOT NULL,
+    source_version_id BIGINT UNSIGNED NOT NULL,
+    assessment_id BIGINT UNSIGNED NULL,
+    recommendation VARCHAR(32) NOT NULL,
+    reason TEXT NOT NULL,
+    origin VARCHAR(32) NOT NULL,
+    model_identifier VARCHAR(255) NULL,
+    client_identifier VARCHAR(255) NULL,
+    valid_until DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    superseded_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    KEY opportunity_recommendations_current (opportunity_id, superseded_at, created_at),
+    CONSTRAINT opportunity_recommendations_opportunity_fk FOREIGN KEY (opportunity_id) REFERENCES opportunities (id),
+    CONSTRAINT opportunity_recommendations_version_fk FOREIGN KEY (source_version_id) REFERENCES source_versions (id),
+    CONSTRAINT opportunity_recommendations_assessment_fk FOREIGN KEY (assessment_id) REFERENCES assessments (id) ON DELETE SET NULL,
+    CONSTRAINT opportunity_recommendations_value_valid CHECK (recommendation IN ('react', 'uninteresting', 'verify')),
+    CONSTRAINT opportunity_recommendations_origin_valid CHECK (origin IN ('user', 'assistant', 'system'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE user_opportunity_state (
+    user_id BIGINT UNSIGNED NOT NULL,
+    opportunity_id BIGINT UNSIGNED NOT NULL,
+    decision VARCHAR(32) NOT NULL DEFAULT 'undecided',
+    decision_reason VARCHAR(100) NULL,
+    decision_note TEXT NULL,
+    read_at DATETIME(6) NULL,
+    workflow_status VARCHAR(32) NOT NULL DEFAULT 'none',
+    lock_version INT UNSIGNED NOT NULL DEFAULT 1,
+    decided_at DATETIME(6) NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (user_id, opportunity_id),
+    KEY user_opportunity_state_queue (user_id, decision, workflow_status, updated_at),
+    CONSTRAINT user_opportunity_state_user_fk FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT user_opportunity_state_opportunity_fk FOREIGN KEY (opportunity_id) REFERENCES opportunities (id),
+    CONSTRAINT user_opportunity_state_decision_valid CHECK (decision IN ('undecided', 'react', 'uninteresting')),
+    CONSTRAINT user_opportunity_state_workflow_valid CHECK (workflow_status IN ('none', 'preparing', 'awaiting_approval', 'submitted', 'awaiting_response', 'response_received', 'closed')),
+    CONSTRAINT user_opportunity_state_lock_positive CHECK (lock_version > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE decision_delegations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    requested_by_user_id BIGINT UNSIGNED NOT NULL,
+    scope_type VARCHAR(32) NOT NULL,
+    scope_json JSON NOT NULL,
+    candidate_profile_id BIGINT UNSIGNED NOT NULL,
+    scoring_rule_set_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    expires_at DATETIME(6) NOT NULL,
+    result_summary_json JSON NULL,
+    created_at DATETIME(6) NOT NULL,
+    completed_at DATETIME(6) NULL,
+    revoked_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    KEY decision_delegations_status_expiry (status, expires_at),
+    CONSTRAINT decision_delegations_user_fk FOREIGN KEY (requested_by_user_id) REFERENCES users (id),
+    CONSTRAINT decision_delegations_profile_fk FOREIGN KEY (candidate_profile_id) REFERENCES candidate_profiles (id),
+    CONSTRAINT decision_delegations_rules_fk FOREIGN KEY (scoring_rule_set_id) REFERENCES scoring_rule_sets (id),
+    CONSTRAINT decision_delegations_scope_valid CHECK (scope_type IN ('opportunity_ids', 'search_run', 'saved_filter')),
+    CONSTRAINT decision_delegations_status_valid CHECK (status IN ('active', 'completed', 'revoked', 'expired'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE opportunity_decision_history (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    opportunity_id BIGINT UNSIGNED NOT NULL,
+    previous_decision VARCHAR(32) NOT NULL,
+    new_decision VARCHAR(32) NOT NULL,
+    reason VARCHAR(100) NULL,
+    note TEXT NULL,
+    actor_type VARCHAR(32) NOT NULL,
+    actor_user_id BIGINT UNSIGNED NULL,
+    delegation_id BIGINT UNSIGNED NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY opportunity_decision_history_timeline (opportunity_id, user_id, created_at),
+    CONSTRAINT opportunity_decision_history_user_fk FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT opportunity_decision_history_opportunity_fk FOREIGN KEY (opportunity_id) REFERENCES opportunities (id),
+    CONSTRAINT opportunity_decision_history_actor_fk FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT opportunity_decision_history_delegation_fk FOREIGN KEY (delegation_id) REFERENCES decision_delegations (id) ON DELETE SET NULL,
+    CONSTRAINT opportunity_decision_history_previous_valid CHECK (previous_decision IN ('undecided', 'react', 'uninteresting')),
+    CONSTRAINT opportunity_decision_history_new_valid CHECK (new_decision IN ('undecided', 'react', 'uninteresting')),
+    CONSTRAINT opportunity_decision_history_actor_type_valid CHECK (actor_type IN ('user', 'assistant', 'system'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE assistant_actions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    client_identifier VARCHAR(255) NOT NULL,
+    action_type VARCHAR(100) NOT NULL,
+    correlation_id VARCHAR(100) NULL,
+    idempotency_key_hash CHAR(64) NULL,
+    target_type VARCHAR(100) NULL,
+    target_id BIGINT UNSIGNED NULL,
+    result_status VARCHAR(32) NOT NULL,
+    result_summary_json JSON NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY assistant_actions_idempotency_unique (client_identifier, idempotency_key_hash),
+    KEY assistant_actions_target (target_type, target_id, created_at),
+    CONSTRAINT assistant_actions_result_valid CHECK (result_status IN ('accepted', 'completed', 'rejected', 'conflict', 'failed'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
