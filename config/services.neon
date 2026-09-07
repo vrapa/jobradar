@@ -42,6 +42,7 @@ services:
 	- App\Api\V1\CancelSearchRequestHandler
 	- App\Api\V1\ClaimRunnerLeaseHandler
 	- App\Api\V1\RenewRunnerLeaseHandler
+	- App\Api\V1\RecordSourceProgressHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
 	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
@@ -71,3 +72,4 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-requests', 'cancel'), 'App\Api\V1\CancelSearchRequestHandler', @searchControlApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'lease'), 'App\Api\V1\ClaimRunnerLeaseHandler', @runnerWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'renew-lease'), 'App\Api\V1\RenewRunnerLeaseHandler', @runnerWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-runs', 'progress'), 'App\Api\V1\RecordSourceProgressHandler', @runnerWriteApiAuthorization)

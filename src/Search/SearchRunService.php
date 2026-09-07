@@ -51,6 +51,12 @@ final class SearchRunService
         });
     }
 
+    public function startRunSource(int $runnerDeviceId, int $runId, string $leaseToken, int $sourceId, SourceRunScope $scope): void
+    {
+        $requestId = $this->requestIdForRun($runId, $runnerDeviceId);
+        $this->startSource($requestId, $leaseToken, $sourceId, $scope);
+    }
+
     public function finishSource(int $requestId, string $leaseToken, int $sourceId, SourceRunResult $result): void
     {
         $this->database->transaction(function () use ($requestId, $leaseToken, $sourceId, $result): void {
@@ -87,6 +93,25 @@ final class SearchRunService
                 'stored_count' => $result->storedCount,
             ]);
         });
+    }
+
+    public function finishRunSource(int $runnerDeviceId, int $runId, string $leaseToken, int $sourceId, SourceRunResult $result): void
+    {
+        $requestId = $this->requestIdForRun($runId, $runnerDeviceId);
+        $this->finishSource($requestId, $leaseToken, $sourceId, $result);
+    }
+
+    private function requestIdForRun(int $runId, int $runnerDeviceId): int
+    {
+        $requestId = $this->database->fetchField(
+            'SELECT search_request_id FROM search_runs WHERE id = ? AND runner_device_id = ?',
+            $runId,
+            $runnerDeviceId,
+        );
+        if ($requestId === null) {
+            throw new \InvalidArgumentException('Běh kontroly nebyl nalezen.');
+        }
+        return (int) $requestId;
     }
 
     private function authorizedRequest(int $requestId, string $leaseToken): Row

@@ -39,6 +39,16 @@ final class RouterFactory
             'package' => 'runner',
             'apiAction' => 'renew-lease',
         ]);
+        $runnerProgress = [
+            'presenter' => 'Api:Api',
+            'action' => 'default',
+            'version' => '1',
+            'package' => 'search-runs',
+            'apiAction' => 'progress',
+            'id' => [Route::FILTER_IN => self::publishApiId(...)],
+            'sourceId' => [Route::FILTER_IN => self::publishApiSourceId(...)],
+        ];
+        $router->addRoute('api/v1/search-runs/<id \d+>/sources/<sourceId \d+>/progress', $runnerProgress);
         $router->addRoute('api/v<version>/<package>[/<apiAction>]', 'Api:Api:default');
         $router->addRoute('prihlaseni', 'Sign:in');
         $router->addRoute('zdroje', 'Source:default');
@@ -57,5 +67,11 @@ final class RouterFactory
     {
         $_GET['id'] = $id;
         return $id;
+    }
+
+    private static function publishApiSourceId(string $sourceId): string
+    {
+        $_GET['sourceId'] = $sourceId;
+        return $sourceId;
     }
 }

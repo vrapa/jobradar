@@ -8,6 +8,7 @@ use App\Api\Auth\ApiIdentity;
 use App\Api\Auth\ApiRequestContext;
 use App\Api\V1\ClaimRunnerLeaseHandler;
 use App\Api\V1\RenewRunnerLeaseHandler;
+use App\Api\V1\RecordSourceProgressHandler;
 use App\Bootstrap;
 use App\Search\SearchRequestService;
 use Nette\Database\Connection;
@@ -27,6 +28,7 @@ final class RunnerLeaseApiHandlerTest extends TestCase
         $requests = $container->getByType(SearchRequestService::class);
         $claim = $container->getByType(ClaimRunnerLeaseHandler::class);
         $renew = $container->getByType(RenewRunnerLeaseHandler::class);
+        $progress = $container->getByType(RecordSourceProgressHandler::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $clientId = $deviceId = $sourceId = $requestId = $runId = null;
 
@@ -76,12 +78,49 @@ final class RunnerLeaseApiHandlerTest extends TestCase
                 $requestId,
             ));
 
+            $startResponse = self::json($progress->handle([
+                'id' => $runId,
+                'sourceId' => $sourceId,
+                'body' => [
+                    'event' => 'start',
+                    'lease_token' => $leaseToken,
+                    'scope' => ['description' => 'První stránka syntetického veřejného API.', 'filters' => ['query' => 'php']],
+                ],
+            ]));
+            self::assertSame(200, $startResponse->getCode());
+            self::assertSame('running', $database->fetchField(
+                'SELECT source_status FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
+
             $renewResponse = self::json($renew->handle(['body' => [
                 'request_id' => $requestId,
                 'lease_token' => $leaseToken,
             ]]));
             self::assertSame(200, $renewResponse->getCode());
             self::assertSame($requestId, self::payload($renewResponse)['data']['request_id']);
+
+            $finishResponse = self::json($progress->handle([
+                'id' => $runId,
+                'sourceId' => $sourceId,
+                'body' => [
+                    'event' => 'finish',
+                    'lease_token' => $leaseToken,
+                    'result' => [
+                        'status' => 'complete', 'pages_traversed' => 1, 'displayed_count' => 0,
+                        'detail_opened_count' => 0, 'stored_count' => 0, 'updated_count' => 0,
+                        'duplicate_count' => 0, 'rejected_count' => 0,
+                    ],
+                ],
+            ]));
+            self::assertSame(200, $finishResponse->getCode());
+            self::assertSame('complete', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
+            self::assertSame(0, (int) $database->fetchField(
+                'SELECT displayed_count FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
         } finally {
             $context->clear();
             if (is_int($runId)) {
