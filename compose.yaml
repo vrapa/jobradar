@@ -1,0 +1,48 @@
+name: jobradar-standalone
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-jobradar}
+      MYSQL_USER: ${DB_USER:-jobradar}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-change-root-before-production}
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - database-data:/var/lib/mysql
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-0}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Prague}
+      APP_RUNTIME_DIR: /var/www/html/var
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-jobradar}
+      DB_USER: ${DB_USER:-jobradar}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    volumes:
+      - application-runtime:/var/www/html/var
+
+volumes:
+  application-runtime:
+  database-data:

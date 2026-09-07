@@ -1,0 +1,10 @@
+.composer-home
+.env
+.git
+.github
+.idea
+.phpstan-cache
+.phpunit.cache
+node_modules
+var
+vendor
