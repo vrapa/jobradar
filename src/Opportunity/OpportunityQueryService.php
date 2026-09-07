@@ -18,6 +18,18 @@ final class OpportunityQueryService
     /** @return list<OpportunitySummary> */
     public function listCurrent(?int $userId = null): array
     {
+        return $this->listByDecisionVisibility($userId, false);
+    }
+
+    /** @return list<OpportunitySummary> */
+    public function listUninteresting(int $userId): array
+    {
+        return $this->listByDecisionVisibility($userId, true);
+    }
+
+    /** @return list<OpportunitySummary> */
+    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting): array
+    {
         $rows = $this->database->fetchAll(
             'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
                     v.original_title, v.translated_title, v.summary, v.incomplete,
@@ -26,10 +38,14 @@ final class OpportunityQueryService
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
-             WHERE o.archived_at IS NULL AND COALESCE(state.decision, ?) <> ?
+             WHERE o.archived_at IS NULL
+               AND ((? = 1 AND state.decision = ?) OR (? = 0 AND COALESCE(state.decision, ?) <> ?))
              ORDER BY o.found_at DESC, o.id DESC',
             OpportunityDecision::Undecided->value,
             $userId,
+            $onlyUninteresting,
+            OpportunityDecision::Uninteresting->value,
+            $onlyUninteresting,
             OpportunityDecision::Undecided->value,
             OpportunityDecision::Uninteresting->value,
         );

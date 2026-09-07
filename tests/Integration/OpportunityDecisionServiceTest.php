@@ -73,9 +73,17 @@ final class OpportunityDecisionServiceTest extends TestCase
             );
             self::assertSame(2, $hidden->lockVersion);
             self::assertFalse($this->listContains($queries, $userId, $opportunityId));
+            self::assertTrue(array_any(
+                $queries->listUninteresting($userId),
+                static fn ($item): bool => $item->id === $opportunityId,
+            ));
             $undo = $service->setManualDecision($userId, $opportunityId, 2, OpportunityDecision::Undecided);
             self::assertSame(3, $undo->lockVersion);
             self::assertTrue($this->listContains($queries, $userId, $opportunityId));
+            self::assertFalse(array_any(
+                $queries->listUninteresting($userId),
+                static fn ($item): bool => $item->id === $opportunityId,
+            ));
             self::assertSame(3, (int) $database->fetchField(
                 'SELECT COUNT(*) FROM opportunity_decision_history WHERE user_id = ? AND opportunity_id = ?',
                 $userId,

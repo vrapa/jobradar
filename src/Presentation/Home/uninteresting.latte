@@ -1,0 +1,23 @@
+{block title}Nezajímavé nabídky{/block}
+
+{block content}
+<header class="mb-4">
+    <p class="text-uppercase text-primary fw-semibold small mb-1">Archiv rozhodnutí</p>
+    <h1 class="display-6 fw-bold">Nezajímavé nabídky</h1>
+    <p class="lead text-body-secondary">Nabídky nejsou smazané. Na detailu je můžete vrátit mezi nerozhodnuté nebo označit k reakci.</p>
+</header>
+
+<div n:if="$opportunityCount === 0" class="card shadow-sm"><div class="card-body py-5 text-center">
+    <h2 class="h4">Žádné skryté nabídky</h2>
+    <a n:href="Home:" class="btn btn-outline-primary">Zpět na přehled</a>
+</div></div>
+
+<div n:if="$opportunityCount > 0" class="list-group shadow-sm">
+    <a n:foreach="$opportunities as $opportunity" n:href="Opportunity:detail $opportunity->id" class="list-group-item list-group-item-action py-3">
+        <div class="d-flex justify-content-between gap-3">
+            <div><h2 class="h6 mb-1">{$opportunity->title}</h2><p class="text-body-secondary mb-0">{$opportunity->companyName ?? 'Společnost neuvedena'}</p></div>
+            <span class="badge text-bg-secondary align-self-start">Nezajímavé</span>
+        </div>
+    </a>
+</div>
+{/block}
