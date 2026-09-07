@@ -13,6 +13,7 @@ services:
 	- App\Console\ImportOpportunitiesCommand
 	- App\Console\ImportAssessmentConfigurationCommand
 	- App\Console\ImportAssessmentCommand
+	- App\Console\CreateApiClientCommand
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\OpportunityQueryService

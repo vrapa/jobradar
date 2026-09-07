@@ -9,6 +9,7 @@ use App\Console\ImportOpportunitiesCommand;
 use App\Console\ImportAssessmentConfigurationCommand;
 use App\Console\ImportAssessmentCommand;
 use App\Console\MigrateCommand;
+use App\Console\CreateApiClientCommand;
 use Symfony\Component\Console\Application;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -20,4 +21,5 @@ $application->add($container->getByType(CreateAdminCommand::class));
 $application->add($container->getByType(ImportOpportunitiesCommand::class));
 $application->add($container->getByType(ImportAssessmentConfigurationCommand::class));
 $application->add($container->getByType(ImportAssessmentCommand::class));
+$application->add($container->getByType(CreateApiClientCommand::class));
 $application->run();

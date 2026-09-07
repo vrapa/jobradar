@@ -31,6 +31,18 @@ final class ApiCredentialService
     ) {
     }
 
+    /** @return list<string> */
+    public function supportedClientTypes(): array
+    {
+        return self::CLIENT_TYPES;
+    }
+
+    /** @return list<string> */
+    public function supportedScopes(): array
+    {
+        return self::SCOPES;
+    }
+
     public function createClient(int $actorUserId, string $name, string $type): ApiClientRegistration
     {
         $name = trim($name);
