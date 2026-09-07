@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 
 final class RunnerLeaseServiceTest extends TestCase
 {
-    public function testClaimStoresOnlyTokenHashAndKeepsMetricsUnknown(): void
+    public function testExpiredLeaseResumesRemainingWorkAndPreservesCompletedResults(): void
     {
         if (getenv('DB_HOST') === false) {
             self::markTestSkipped('Integrační databáze není nakonfigurovaná.');
@@ -28,7 +28,7 @@ final class RunnerLeaseServiceTest extends TestCase
         $runs = $container->getByType(SearchRunService::class);
         $queries = $container->getByType(SourceQueryService::class);
         $unique = bin2hex(random_bytes(8));
-        $userId = $sourceId = $deviceId = $requestId = $runId = null;
+        $userId = $sourceId = $secondSourceId = $deviceId = $requestId = $runId = null;
 
         try {
             $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
@@ -45,19 +45,27 @@ final class RunnerLeaseServiceTest extends TestCase
                 'adapter_capabilities' => '{}', 'created_at' => $now, 'updated_at' => $now,
             ]);
             $sourceId = (int) $database->getInsertId();
+            $database->query('INSERT INTO sources', [
+                'name' => 'Synthetic remaining runner source ' . $unique,
+                'url' => 'https://runner-source.example.test/' . $unique . '/remaining',
+                'market_code' => null, 'source_type' => 'public_api', 'priority' => 'A',
+                'recommended_frequency_hours' => null, 'active' => true, 'access_requirement' => 'public',
+                'adapter_capabilities' => '{}', 'created_at' => $now, 'updated_at' => $now,
+            ]);
+            $secondSourceId = (int) $database->getInsertId();
             $database->query('INSERT INTO runner_devices', [
                 'public_identifier' => '00000000-0000-4000-8000-' . substr($unique . str_repeat('0', 12), 0, 12),
                 'name' => 'Synthetic runner', 'runner_version' => 'test', 'device_status' => 'offline',
                 'created_at' => $now,
             ]);
             $deviceId = (int) $database->getInsertId();
-            $requestId = $requests->request($userId, [$sourceId], 'runner-lease-test-' . $unique)->requestId;
+            $requestId = $requests->request($userId, [$sourceId, $secondSourceId], 'runner-lease-test-' . $unique)->requestId;
 
             $lease = $leases->claimNext($deviceId);
             self::assertNotNull($lease);
             $runId = $lease->runId;
             self::assertSame($requestId, $lease->requestId);
-            self::assertSame([$sourceId], $lease->sourceIds);
+            self::assertSame([$sourceId, $secondSourceId], $lease->sourceIds);
             self::assertSame(64, strlen($lease->token));
             self::assertSame(hash('sha256', $lease->token), $database->fetchField(
                 'SELECT lease_token_hash FROM search_requests WHERE id = ?',
@@ -68,13 +76,18 @@ final class RunnerLeaseServiceTest extends TestCase
                 $requestId,
             ));
             self::assertSame('checking_access', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
-            $planned = $database->fetch('SELECT * FROM search_run_sources WHERE search_run_id = ?', $runId);
+            $planned = $database->fetch(
+                'SELECT * FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            );
             self::assertNotNull($planned);
             self::assertSame('planned', $planned['source_status']);
             self::assertNull($planned['pages_traversed']);
             self::assertNull($planned['displayed_count']);
             self::assertNull($planned['finished_at']);
-            self::assertNull($leases->claimNext($deviceId));
+            $unavailableLease = $leases->claimNext($deviceId);
+            self::assertNull($unavailableLease);
             $renewedUntil = $leases->renew($deviceId, $requestId, $lease->token);
             self::assertGreaterThanOrEqual($lease->expiresAt, $renewedUntil);
             self::assertSame($renewedUntil->format('Y-m-d H:i:s.u'), $database->fetchField(
@@ -106,8 +119,8 @@ final class RunnerLeaseServiceTest extends TestCase
                 $sourceId,
                 new SourceRunResult('complete', 1, 0, 0, 0, 0, 0, 0),
             );
-            self::assertSame('complete', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
-            self::assertSame('complete', $database->fetchField('SELECT run_status FROM search_runs WHERE id = ?', $runId));
+            self::assertSame('running', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
+            self::assertSame('running', $database->fetchField('SELECT run_status FROM search_runs WHERE id = ?', $runId));
             self::assertSame(0, (int) $database->fetchField(
                 'SELECT displayed_count FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
                 $runId,
@@ -118,6 +131,61 @@ final class RunnerLeaseServiceTest extends TestCase
                 $runId,
                 $sourceId,
             ));
+            $runs->startSource(
+                $requestId,
+                $lease->token,
+                $secondSourceId,
+                new SourceRunScope('Rozpracovaný zdroj před přerušením.'),
+            );
+            $database->query(
+                'UPDATE search_requests SET lease_expires_at = ? WHERE id = ?',
+                $now->modify('-1 minute'),
+                $requestId,
+            );
+            $resumedLease = $leases->claimNext($deviceId);
+            self::assertNotNull($resumedLease);
+            self::assertSame($runId, $resumedLease->runId);
+            self::assertSame([$secondSourceId], $resumedLease->sourceIds);
+            self::assertSame('planned', $database->fetchField(
+                'SELECT source_status FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $secondSourceId,
+            ));
+            self::assertSame('complete', $database->fetchField(
+                'SELECT source_status FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
+            self::assertSame(0, (int) $database->fetchField(
+                'SELECT displayed_count FROM search_run_sources WHERE search_run_id = ? AND source_id = ?',
+                $runId,
+                $sourceId,
+            ));
+            try {
+                $runs->startSource(
+                    $requestId,
+                    $lease->token,
+                    $secondSourceId,
+                    new SourceRunScope('Starý lease nesmí pokračovat.'),
+                );
+                self::fail('Přerušený runner nesmí zapisovat starým lease tokenem.');
+            } catch (\InvalidArgumentException $exception) {
+                self::assertSame('Lease neexistuje, neodpovídá nebo vypršel.', $exception->getMessage());
+            }
+            $runs->startSource(
+                $requestId,
+                $resumedLease->token,
+                $secondSourceId,
+                new SourceRunScope('Druhá stránka veřejného API.'),
+            );
+            $runs->finishSource(
+                $requestId,
+                $resumedLease->token,
+                $secondSourceId,
+                new SourceRunResult('complete', 1, 1, 1, 1, 0, 0, 0),
+            );
+            self::assertSame('complete', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
+            self::assertSame('complete', $database->fetchField('SELECT run_status FROM search_runs WHERE id = ?', $runId));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
             $sourceViews = array_values(array_filter(
                 $queries->activeCheckableSources(),
@@ -129,12 +197,12 @@ final class RunnerLeaseServiceTest extends TestCase
             self::assertNull($sourceViews[0]->lastFoundAt);
             $coverage = $queries->latestCoverageSummary($userId);
             self::assertNotNull($coverage);
-            self::assertSame(1, $coverage->plannedCount);
-            self::assertSame(1, $coverage->completeCount);
+            self::assertSame(2, $coverage->plannedCount);
+            self::assertSame(2, $coverage->completeCount);
             self::assertSame(0, $coverage->loginRequiredCount);
             self::assertSame(0, $coverage->errorCount);
             try {
-                $leases->renew($deviceId, $requestId, $lease->token);
+                $leases->renew($deviceId, $requestId, $resumedLease->token);
                 self::fail('Dokončený běh nesmí obnovit lease.');
             } catch (\InvalidArgumentException $exception) {
                 self::assertSame('Aktivní lease neexistuje, neodpovídá zařízení nebo vypršel.', $exception->getMessage());
@@ -158,6 +226,10 @@ final class RunnerLeaseServiceTest extends TestCase
             if ($sourceId !== null) {
                 $database->query('DELETE FROM source_access_states WHERE source_id = ?', $sourceId);
                 $database->query('DELETE FROM sources WHERE id = ?', $sourceId);
+            }
+            if ($secondSourceId !== null) {
+                $database->query('DELETE FROM source_access_states WHERE source_id = ?', $secondSourceId);
+                $database->query('DELETE FROM sources WHERE id = ?', $secondSourceId);
             }
             if ($userId !== null) {
                 $database->query('DELETE FROM audit_log WHERE actor_user_id = ?', $userId);

@@ -31,7 +31,7 @@ final class RunnerLeaseService
                 throw new \InvalidArgumentException('Runner zařízení neexistuje nebo bylo odvoláno.');
             }
             $request = $this->database->fetch(
-                "SELECT id FROM search_requests
+                "SELECT id, request_status FROM search_requests
                  WHERE request_status IN ('waiting_for_runner', 'resume_requested')
                     OR (request_status IN ('checking_access', 'running') AND lease_expires_at < ?)
                  ORDER BY requested_at, id LIMIT 1 FOR UPDATE SKIP LOCKED",
@@ -54,8 +54,12 @@ final class RunnerLeaseService
                 $requestId,
             );
             $run = $this->database->fetch('SELECT id FROM search_runs WHERE search_request_id = ?', $requestId);
+            $recoveredSourceCount = 0;
             if ($run instanceof Row) {
                 $runId = (int) $run['id'];
+                if (in_array((string) $request['request_status'], ['checking_access', 'running'], true)) {
+                    $recoveredSourceCount = $this->recoverInterruptedSources($runId);
+                }
                 $this->database->query(
                     'UPDATE search_runs SET runner_device_id = ?, run_status = ? WHERE id = ?',
                     $runnerDeviceId,
@@ -96,10 +100,33 @@ final class RunnerLeaseService
                 'search_run_id' => $runId,
                 'runner_device_id' => $runnerDeviceId,
                 'source_count' => count($sourceIds),
+                'recovered_source_count' => $recoveredSourceCount,
             ]);
 
             return new RunnerLease($requestId, $runId, $token, $expiresAt, $sourceIds);
         });
+    }
+
+    private function recoverInterruptedSources(int $runId): int
+    {
+        $result = $this->database->query(
+            "UPDATE search_run_sources SET
+                source_status = 'planned',
+                pages_traversed = NULL,
+                displayed_count = NULL,
+                detail_opened_count = NULL,
+                stored_count = NULL,
+                updated_count = NULL,
+                duplicate_count = NULL,
+                rejected_count = NULL,
+                finished_at = NULL,
+                incomplete_reason = NULL,
+                error_code = NULL,
+                login_required = 0
+             WHERE search_run_id = ? AND source_status = 'running'",
+            $runId,
+        );
+        return (int) $result->getRowCount();
     }
 
     public function renew(int $runnerDeviceId, int $requestId, string $leaseToken): \DateTimeImmutable
