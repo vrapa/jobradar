@@ -32,6 +32,7 @@ services:
 	- App\Search\SearchRunService
 	- App\Search\SearchRequestControlService
 	- App\Api\Auth\ApiCredentialService
+	- App\Api\Auth\ApiRequestContext
 	- App\Api\V1\SourcesHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator

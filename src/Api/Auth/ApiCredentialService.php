@@ -117,7 +117,7 @@ final class ApiCredentialService
         }
         $row = $this->database->fetch(
             'SELECT token.id AS token_id, token.scopes_json, token.expires_at, token.revoked_at AS token_revoked_at,
-                    client.id AS client_id, client.public_identifier, client.name, client.client_type,
+                    client.id AS client_id, client.created_by_user_id, client.public_identifier, client.name, client.client_type,
                     client.revoked_at AS client_revoked_at
              FROM api_access_tokens token
              INNER JOIN api_clients client ON client.id = token.api_client_id
@@ -141,6 +141,7 @@ final class ApiCredentialService
         return new ApiIdentity(
             tokenId: (int) $row['token_id'],
             clientId: (int) $row['client_id'],
+            ownerUserId: (int) $row['created_by_user_id'],
             clientIdentifier: (string) $row['public_identifier'],
             clientName: (string) $row['name'],
             clientType: (string) $row['client_type'],

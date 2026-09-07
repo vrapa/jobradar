@@ -12,6 +12,7 @@ final class ScopedBearerAuthorization implements ApiAuthorizationInterface
 
     public function __construct(
         private readonly ApiCredentialService $credentials,
+        private readonly ApiRequestContext $requestContext,
         private readonly string $requiredScope,
     ) {
     }
@@ -19,17 +20,19 @@ final class ScopedBearerAuthorization implements ApiAuthorizationInterface
     public function authorized(): bool
     {
         $this->errorMessage = null;
+        $this->requestContext->clear();
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
         if (!is_string($header) || preg_match('/^Bearer ([A-Za-z0-9_-]+)$/D', $header, $matches) !== 1) {
             $this->errorMessage = 'Chybí platná Bearer autorizace.';
             return false;
         }
         try {
-            $this->credentials->authenticate($matches[1], $this->requiredScope);
+            $identity = $this->credentials->authenticate($matches[1], $this->requiredScope);
         } catch (ApiAuthenticationException) {
             $this->errorMessage = 'API token není platný nebo nemá požadované oprávnění.';
             return false;
         }
+        $this->requestContext->authenticate($identity);
         return true;
     }
 

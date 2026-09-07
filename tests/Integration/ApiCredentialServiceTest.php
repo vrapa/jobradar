@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Api\Auth\ApiAuthenticationException;
 use App\Api\Auth\ApiCredentialService;
 use App\Api\Auth\ScopedBearerAuthorization;
+use App\Api\Auth\ApiRequestContext;
 use App\Bootstrap;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
@@ -56,18 +57,27 @@ final class ApiCredentialServiceTest extends TestCase
 
             $identity = $credentials->authenticate($issue->token, 'sources:read');
             self::assertSame($clientId, $identity->clientId);
+            self::assertSame($userId, $identity->ownerUserId);
             self::assertTrue($identity->hasScope('opportunities:read'));
             self::assertNotNull($database->fetchField('SELECT last_used_at FROM api_access_tokens WHERE id = ?', $tokenId));
 
             $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $issue->token;
-            $authorization = new ScopedBearerAuthorization($credentials, 'sources:read');
+            $requestContext = new ApiRequestContext();
+            $authorization = new ScopedBearerAuthorization($credentials, $requestContext, 'sources:read');
             self::assertTrue($authorization->authorized());
-            $wrongScopeAuthorization = new ScopedBearerAuthorization($credentials, 'search:control');
+            self::assertSame($userId, $requestContext->identity()->ownerUserId);
+            $wrongScopeAuthorization = new ScopedBearerAuthorization($credentials, $requestContext, 'search:control');
             self::assertFalse($wrongScopeAuthorization->authorized());
             self::assertSame(
                 'API token není platný nebo nemá požadované oprávnění.',
                 $wrongScopeAuthorization->getErrorMessage(),
             );
+            try {
+                $requestContext->identity();
+                self::fail('Neúspěšná autorizace musí vyčistit kontext identity.');
+            } catch (\LogicException $exception) {
+                self::assertSame('API požadavek nemá ověřenou identitu.', $exception->getMessage());
+            }
 
             try {
                 $credentials->authenticate($issue->token, 'search:control');

@@ -10,6 +10,7 @@ final readonly class ApiIdentity
     public function __construct(
         public int $tokenId,
         public int $clientId,
+        public int $ownerUserId,
         public string $clientIdentifier,
         public string $clientName,
         public string $clientType,
