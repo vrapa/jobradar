@@ -86,6 +86,9 @@ final class OpportunityImportServiceTest extends TestCase
             self::assertNotNull($detail);
             self::assertSame('Synthetic offer version two with changed terms.', $detail->originalText);
             self::assertSame(2, $detail->versionCount);
+            self::assertCount(2, $detail->versions);
+            self::assertTrue($detail->versions[0]->current);
+            self::assertFalse($detail->versions[1]->current);
             self::assertTrue(array_any(
                 $queries->listCurrent(),
                 static fn ($item): bool => $item->id === $opportunityId,

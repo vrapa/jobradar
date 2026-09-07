@@ -40,4 +40,10 @@ final class UrlNormalizerTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         (new UrlNormalizer())->normalize('https://user:secret@example.test/job');
     }
+
+    public function testRejectsUrlLongerThanDatabaseLimit(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new UrlNormalizer())->normalize('https://example.test/' . str_repeat('a', 2048));
+    }
 }

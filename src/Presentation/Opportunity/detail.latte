@@ -49,4 +49,23 @@
 <p class="small text-body-secondary mt-4 mb-0">
     Nalezeno {$opportunity->foundAt|date:'j. n. Y H:i'}, aktuální verze získána {$opportunity->acquiredAt|date:'j. n. Y H:i'}{if $opportunity->sourceLanguage !== null}, jazyk {$opportunity->sourceLanguage}{/if}.
 </p>
+
+<section n:if="$opportunity->versionCount > 1" class="mt-5" aria-labelledby="version-history-title">
+    <h2 id="version-history-title" class="h4 mb-3">Historie verzí</h2>
+    <div class="vstack gap-2">
+        <details n:foreach="$opportunity->versions as $version" class="card shadow-sm" n:attr="open => $version->current">
+            <summary class="card-header version-summary">
+                <span class="fw-semibold">{$version->acquiredAt|date:'j. n. Y H:i'}</span>
+                <span n:if="$version->current" class="badge text-bg-primary ms-2">Aktuální</span>
+                <span n:if="$version->incomplete" class="badge text-bg-warning ms-2">Neúplná</span>
+            </summary>
+            <div class="card-body">
+                <h3 class="h6">{$version->translatedTitle ?? $version->originalTitle}</h3>
+                <div n:if="$version->translatedText !== null" class="offer-text mb-4">{$version->translatedText}</div>
+                <h4 n:if="$version->translatedText !== null" class="h6 text-body-secondary">Originál</h4>
+                <div class="offer-text">{$version->originalText}</div>
+            </div>
+        </details>
+    </div>
+</section>
 {/block}

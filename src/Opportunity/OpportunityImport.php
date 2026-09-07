@@ -23,5 +23,17 @@ final readonly class OpportunityImport
         if (trim($this->originalText) === '') {
             throw new \InvalidArgumentException('Původní text nabídky je povinný.');
         }
+        $this->assertLength($this->originalTitle, 500, 'Původní titulek');
+        $this->assertLength($this->translatedTitle, 500, 'Český titulek');
+        $this->assertLength($this->companyName, 255, 'Název společnosti');
+        $this->assertLength($this->sourceLanguage, 16, 'Jazyk originálu');
+        $this->assertLength($this->summary, 65_535, 'Shrnutí');
+    }
+
+    private function assertLength(?string $value, int $maximum, string $label): void
+    {
+        if ($value !== null && mb_strlen(trim($value)) > $maximum) {
+            throw new \InvalidArgumentException(sprintf('%s smí mít nejvýše %d znaků.', $label, $maximum));
+        }
     }
 }

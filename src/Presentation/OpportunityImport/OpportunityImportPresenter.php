@@ -21,20 +21,26 @@ final class OpportunityImportPresenter extends SecuredPresenter
         $form = new Form();
         $form->addText('url', 'URL nabídky')
             ->setHtmlType('url')
+            ->addRule(Form::MaxLength, 'URL smí mít nejvýše %d znaků.', 2048)
             ->setHtmlAttribute('placeholder', 'https://example.com/jobs/php-developer')
             ->setRequired('Zadejte URL nabídky.');
-        $form->addText('companyName', 'Společnost');
+        $form->addText('companyName', 'Společnost')
+            ->addRule(Form::MaxLength, 'Název společnosti smí mít nejvýše %d znaků.', 255);
         $form->addText('originalTitle', 'Původní titulek')
+            ->addRule(Form::MaxLength, 'Titulek smí mít nejvýše %d znaků.', 500)
             ->setRequired('Zadejte původní titulek.');
         $form->addTextArea('originalText', 'Původní text')
             ->setHtmlAttribute('rows', 12)
             ->setRequired('Vložte původní text nabídky.');
         $form->addText('sourceLanguage', 'Jazyk originálu')
+            ->addRule(Form::MaxLength, 'Jazyk smí mít nejvýše %d znaků.', 16)
             ->setHtmlAttribute('placeholder', 'en, de, cs');
-        $form->addText('translatedTitle', 'Český titulek');
+        $form->addText('translatedTitle', 'Český titulek')
+            ->addRule(Form::MaxLength, 'Titulek smí mít nejvýše %d znaků.', 500);
         $form->addTextArea('translatedText', 'Český překlad')
             ->setHtmlAttribute('rows', 12);
         $form->addTextArea('summary', 'Shrnutí')
+            ->addRule(Form::MaxLength, 'Shrnutí smí mít nejvýše %d znaků.', 65_535)
             ->setHtmlAttribute('rows', 4);
         $form->addCheckbox('incomplete', 'Zdrojový text je neúplný');
         $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');

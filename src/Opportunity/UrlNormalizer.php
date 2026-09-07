@@ -17,6 +17,9 @@ final class UrlNormalizer
     public function normalize(string $url): string
     {
         $url = trim($url);
+        if (mb_strlen($url) > 2048) {
+            throw new \InvalidArgumentException('URL smí mít nejvýše 2048 znaků.');
+        }
         $parts = parse_url($url);
         if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
             throw new \InvalidArgumentException('URL nabídky není platná absolutní adresa.');

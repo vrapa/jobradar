@@ -6,6 +6,7 @@ namespace App\Opportunity;
 
 final readonly class OpportunityDetail
 {
+    /** @param list<OpportunityVersion> $versions */
     public function __construct(
         public int $id,
         public string $title,
@@ -22,6 +23,7 @@ final readonly class OpportunityDetail
         public \DateTimeInterface $foundAt,
         public \DateTimeInterface $acquiredAt,
         public int $versionCount,
+        public array $versions,
     ) {
     }
 }

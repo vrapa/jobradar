@@ -43,7 +43,7 @@ final class OpportunityQueryService
     public function getDetail(int $id): ?OpportunityDetail
     {
         $row = $this->database->fetch(
-            'SELECT o.id, o.canonical_url, o.validity_status, o.found_at, c.name AS company_name,
+            'SELECT o.id, o.canonical_url, o.validity_status, o.found_at, o.current_source_version_id, c.name AS company_name,
                     v.original_title, v.translated_title, v.original_text, v.translated_text,
                     v.summary, v.source_language, v.incomplete, v.acquired_at,
                     (SELECT COUNT(*) FROM source_versions versions WHERE versions.opportunity_id = o.id) AS version_count
@@ -59,6 +59,7 @@ final class OpportunityQueryService
 
         $originalTitle = (string) $row['original_title'];
         $translatedTitle = self::nullableString($row['translated_title']);
+        $versions = $this->loadVersions($id, (int) $row['current_source_version_id']);
 
         return new OpportunityDetail(
             id: (int) $row['id'],
@@ -76,6 +77,33 @@ final class OpportunityQueryService
             foundAt: self::dateTime($row['found_at']),
             acquiredAt: self::dateTime($row['acquired_at']),
             versionCount: (int) $row['version_count'],
+            versions: $versions,
+        );
+    }
+
+    /** @return list<OpportunityVersion> */
+    private function loadVersions(int $opportunityId, int $currentVersionId): array
+    {
+        $rows = $this->database->fetchAll(
+            'SELECT id, original_title, translated_title, original_text, translated_text, incomplete, acquired_at
+             FROM source_versions
+             WHERE opportunity_id = ?
+             ORDER BY acquired_at DESC, id DESC',
+            $opportunityId,
+        );
+
+        return array_map(
+            static fn (Row $row): OpportunityVersion => new OpportunityVersion(
+                id: (int) $row['id'],
+                originalTitle: (string) $row['original_title'],
+                translatedTitle: self::nullableString($row['translated_title']),
+                originalText: (string) $row['original_text'],
+                translatedText: self::nullableString($row['translated_text']),
+                incomplete: (bool) $row['incomplete'],
+                acquiredAt: self::dateTime($row['acquired_at']),
+                current: (int) $row['id'] === $currentVersionId,
+            ),
+            $rows,
         );
     }
 
