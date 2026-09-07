@@ -21,12 +21,18 @@ final class OpportunityTermsInputTest extends TestCase
     public function testRejectsInvalidRangeAndConfidence(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new OpportunityTermsInput(rateMin: '900', rateMax: '800', rateConfidence: '1.2');
+        new OpportunityTermsInput(rateMin: '900', rateMax: '800', rateSource: 'Offer', rateConfidence: '1.2');
     }
 
     public function testRejectsNonIsoCurrencyCode(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new OpportunityTermsInput(currency: 'Kč');
+    }
+
+    public function testKnownRateRequiresProvenanceAndConfidence(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new OpportunityTermsInput(rateMin: '700', currency: 'CZK');
     }
 }

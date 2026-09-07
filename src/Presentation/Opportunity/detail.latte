@@ -15,8 +15,41 @@
     </div>
     <h1 class="display-6 fw-bold mb-2">{$opportunity->title}</h1>
     <p class="lead text-body-secondary">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>
-    <a href="{$opportunity->canonicalUrl}" class="btn btn-outline-primary" rel="noopener noreferrer" target="_blank">Otevřít původní stránku</a>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{$opportunity->canonicalUrl}" class="btn btn-outline-primary" rel="noopener noreferrer" target="_blank">Otevřít původní stránku</a>
+        <a n:href="OpportunityTerms: $opportunity->id" class="btn btn-primary">Upravit podmínky</a>
+    </div>
 </header>
+
+<section class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+            <h2 class="h5 mb-0">Podmínky</h2>
+            <a n:href="OpportunityTerms: $opportunity->id" class="small">Upravit</a>
+        </div>
+        <div class="row g-3">
+            <div class="col-6 col-lg-3">
+                <div class="small text-body-secondary">Sazba</div>
+                <div class="fw-semibold">
+                    {if $opportunity->terms?->rateMin !== null || $opportunity->terms?->rateMax !== null}
+                        {$opportunity->terms?->rateMin ?? '?'}–{$opportunity->terms?->rateMax ?? '?'} {$opportunity->terms?->currency ?? ''}{if $opportunity->terms?->rateUnit !== null}/{$opportunity->terms->rateUnit}{/if}
+                    {else}Neznámá{/if}
+                </div>
+                <div n:if="$opportunity->terms?->rateSource !== null" class="small text-body-secondary">{$opportunity->terms->rateSource}, jistota {$opportunity->terms->rateConfidence}</div>
+            </div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Režim</div><div class="fw-semibold">{$opportunity->terms?->remoteMode ?? 'Neznámý'}</div></div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Práce z ČR</div><div class="fw-semibold">{if $opportunity->terms?->workFromCzechia === true}Ano{elseif $opportunity->terms?->workFromCzechia === false}Ne{else}Neověřeno{/if}</div></div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Rozsah</div><div class="fw-semibold">{if $opportunity->terms?->workloadMin !== null || $opportunity->terms?->workloadMax !== null}{$opportunity->terms?->workloadMin ?? '?'}–{$opportunity->terms?->workloadMax ?? '?'} {$opportunity->terms?->workloadUnit ?? ''}{else}Neznámý{/if}</div></div>
+            <div n:if="$opportunity->terms?->location !== null" class="col-6 col-lg-3"><div class="small text-body-secondary">Lokalita</div><div>{$opportunity->terms->location}</div></div>
+            <div n:if="$opportunity->terms?->workingLanguage !== null" class="col-6 col-lg-3"><div class="small text-body-secondary">Jazyk</div><div>{$opportunity->terms->workingLanguage}</div></div>
+            <div n:if="$opportunity->terms?->communicationMode !== null" class="col-6 col-lg-3"><div class="small text-body-secondary">Komunikace</div><div>{$opportunity->terms->communicationMode}</div></div>
+            <div n:if="$opportunity->terms?->durationText !== null" class="col-6 col-lg-3"><div class="small text-body-secondary">Délka</div><div>{$opportunity->terms->durationText}</div></div>
+        </div>
+        <div n:if="count($opportunity->technologies) > 0" class="mt-3 d-flex flex-wrap gap-2">
+            <span n:foreach="$opportunity->technologies as $technology" class="badge {$technology->requirementLevel === 'required' ? 'text-bg-primary' : ($technology->requirementLevel === 'advantage' ? 'text-bg-info' : 'text-bg-light border')}">{$technology->name}{if $technology->requirementLevel === 'required'} · povinné{elseif $technology->requirementLevel === 'advantage'} · výhodou{/if}</span>
+        </div>
+    </div>
+</section>
 
 <section n:if="$opportunity->summary !== null" class="card shadow-sm mb-4">
     <div class="card-body">

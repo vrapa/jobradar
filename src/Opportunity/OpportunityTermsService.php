@@ -85,7 +85,9 @@ final class OpportunityTermsService
             'work_timezone' => $terms->workTimezone,
             'working_language' => $terms->workingLanguage,
             'communication_mode' => $terms->communicationMode,
-            'verified_at' => null,
+            'verified_at' => $terms->hasKnownRate()
+                ? new \DateTimeImmutable('now', new \DateTimeZone('UTC'))
+                : null,
         ];
         $existing = $this->database->fetchField('SELECT id FROM opportunity_terms WHERE source_version_id = ?', $versionId);
         if ($existing === null) {

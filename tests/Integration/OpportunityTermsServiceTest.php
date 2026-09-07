@@ -8,6 +8,7 @@ use App\Bootstrap;
 use App\Opportunity\OpportunityConflictException;
 use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
+use App\Opportunity\OpportunityQueryService;
 use App\Opportunity\OpportunityTermsInput;
 use App\Opportunity\OpportunityTermsService;
 use App\Opportunity\TechnologyInput;
@@ -25,6 +26,7 @@ final class OpportunityTermsServiceTest extends TestCase
         $container = (new Bootstrap(dirname(__DIR__, 2)))->bootConsole();
         $imports = $container->getByType(OpportunityImportService::class);
         $service = $container->getByType(OpportunityTermsService::class);
+        $queries = $container->getByType(OpportunityQueryService::class);
         $database = $container->getByType(Connection::class);
         $unique = bin2hex(random_bytes(8));
         $opportunityId = null;
@@ -61,11 +63,18 @@ final class OpportunityTermsServiceTest extends TestCase
             self::assertNull($terms['rate_min']);
             self::assertSame(900.0, (float) $terms['rate_max']);
             self::assertSame('Text nabídky', $terms['rate_source']);
+            self::assertNotNull($terms['verified_at']);
             self::assertNull($terms['work_from_czechia']);
             self::assertSame(2, (int) $database->fetchField(
                 'SELECT COUNT(*) FROM technology_requirements WHERE opportunity_id = ?',
                 $opportunityId,
             ));
+            $detail = $queries->getDetail($opportunityId);
+            self::assertNotNull($detail);
+            self::assertSame(2, $detail->lockVersion);
+            self::assertSame('Text nabídky', $detail->terms?->rateSource);
+            self::assertNull($detail->terms->workFromCzechia);
+            self::assertCount(2, $detail->technologies);
 
             $this->expectException(OpportunityConflictException::class);
             $service->save($opportunityId, 1, new OpportunityTermsInput(), []);

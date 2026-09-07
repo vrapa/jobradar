@@ -43,7 +43,7 @@ final class OpportunityQueryService
     public function getDetail(int $id): ?OpportunityDetail
     {
         $row = $this->database->fetch(
-            'SELECT o.id, o.canonical_url, o.validity_status, o.found_at, o.current_source_version_id, c.name AS company_name,
+            'SELECT o.id, o.canonical_url, o.validity_status, o.found_at, o.current_source_version_id, o.lock_version, c.name AS company_name,
                     v.original_title, v.translated_title, v.original_text, v.translated_text,
                     v.summary, v.source_language, v.incomplete, v.acquired_at,
                     (SELECT COUNT(*) FROM source_versions versions WHERE versions.opportunity_id = o.id) AS version_count
@@ -60,6 +60,8 @@ final class OpportunityQueryService
         $originalTitle = (string) $row['original_title'];
         $translatedTitle = self::nullableString($row['translated_title']);
         $versions = $this->loadVersions($id, (int) $row['current_source_version_id']);
+        $terms = $this->loadTerms((int) $row['current_source_version_id']);
+        $technologies = $this->loadTechnologies((int) $row['current_source_version_id']);
 
         return new OpportunityDetail(
             id: (int) $row['id'],
@@ -78,6 +80,63 @@ final class OpportunityQueryService
             acquiredAt: self::dateTime($row['acquired_at']),
             versionCount: (int) $row['version_count'],
             versions: $versions,
+            lockVersion: (int) $row['lock_version'],
+            terms: $terms,
+            technologies: $technologies,
+        );
+    }
+
+    private function loadTerms(int $versionId): ?OpportunityTermsView
+    {
+        $row = $this->database->fetch('SELECT * FROM opportunity_terms WHERE source_version_id = ?', $versionId);
+        if (!$row instanceof Row) {
+            return null;
+        }
+
+        return new OpportunityTermsView(
+            rateMin: self::nullableString($row['rate_min']),
+            rateMax: self::nullableString($row['rate_max']),
+            currency: self::nullableString($row['currency']),
+            rateUnit: self::nullableString($row['rate_unit']),
+            engagementMode: self::nullableString($row['engagement_mode']),
+            rateSource: self::nullableString($row['rate_source']),
+            rateConfidence: self::nullableString($row['rate_confidence']),
+            workloadMin: self::nullableString($row['workload_min']),
+            workloadMax: self::nullableString($row['workload_max']),
+            workloadUnit: self::nullableString($row['workload_unit']),
+            durationText: self::nullableString($row['duration_text']),
+            remoteMode: self::nullableString($row['remote_mode']),
+            workFromCzechia: match ($row['work_from_czechia']) {
+                'yes' => true,
+                'no' => false,
+                default => null,
+            },
+            location: self::nullableString($row['location']),
+            workTimezone: self::nullableString($row['work_timezone']),
+            workingLanguage: self::nullableString($row['working_language']),
+            communicationMode: self::nullableString($row['communication_mode']),
+            verifiedAt: self::nullableDateTime($row['verified_at']),
+        );
+    }
+
+    /** @return list<TechnologyView> */
+    private function loadTechnologies(int $versionId): array
+    {
+        $rows = $this->database->fetchAll(
+            'SELECT technology_name, requirement_level, proven_experience, scoring_relevance, evidence
+             FROM technology_requirements WHERE source_version_id = ? ORDER BY technology_name',
+            $versionId,
+        );
+
+        return array_map(
+            static fn (Row $row): TechnologyView => new TechnologyView(
+                name: (string) $row['technology_name'],
+                requirementLevel: (string) $row['requirement_level'],
+                provenExperience: $row['proven_experience'] === null ? null : (bool) $row['proven_experience'],
+                scoringRelevance: self::nullableString($row['scoring_relevance']),
+                evidence: self::nullableString($row['evidence']),
+            ),
+            $rows,
         );
     }
 
@@ -119,5 +178,10 @@ final class OpportunityQueryService
         }
 
         return $value;
+    }
+
+    private static function nullableDateTime(mixed $value): ?\DateTimeInterface
+    {
+        return $value === null ? null : self::dateTime($value);
     }
 }

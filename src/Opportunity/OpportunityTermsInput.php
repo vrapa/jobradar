@@ -39,6 +39,17 @@ final readonly class OpportunityTermsInput
         if ($this->currency !== null && preg_match('/^[A-Z]{3}$/', $this->currency) !== 1) {
             throw new \InvalidArgumentException('Měna musí být třípísmenný ISO kód, například CZK nebo EUR.');
         }
+        if ($this->hasKnownRate() && (trim((string) $this->rateSource) === '' || $this->rateConfidence === null)) {
+            throw new \InvalidArgumentException('U známé sazby uveďte její původ a míru jistoty.');
+        }
+        if (!$this->hasKnownRate() && ($this->rateSource !== null || $this->rateConfidence !== null)) {
+            throw new \InvalidArgumentException('Původ a jistotu sazby lze uložit jen společně se sazbou.');
+        }
+    }
+
+    public function hasKnownRate(): bool
+    {
+        return $this->rateMin !== null || $this->rateMax !== null;
     }
 
     private function assertDecimal(?string $value, string $label): void
