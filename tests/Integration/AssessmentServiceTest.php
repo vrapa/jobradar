@@ -8,6 +8,7 @@ use App\Assessment\AssessmentBreakdownInput;
 use App\Assessment\AssessmentFindingInput;
 use App\Assessment\AssessmentInput;
 use App\Assessment\AssessmentRecommendation;
+use App\Assessment\AssessmentQueryService;
 use App\Assessment\AssessmentService;
 use App\Bootstrap;
 use App\Opportunity\OpportunityImport;
@@ -26,6 +27,7 @@ final class AssessmentServiceTest extends TestCase
         $database = $container->getByType(Connection::class);
         $imports = $container->getByType(OpportunityImportService::class);
         $service = $container->getByType(AssessmentService::class);
+        $queries = $container->getByType(AssessmentQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $opportunityId = $profileId = $ruleSetId = null;
 
@@ -88,6 +90,13 @@ final class AssessmentServiceTest extends TestCase
                 'SELECT COUNT(*) FROM user_opportunity_state WHERE opportunity_id = ?',
                 $opportunityId,
             ));
+            $view = $queries->getCurrent($opportunityId);
+            self::assertNotNull($view);
+            self::assertSame(AssessmentRecommendation::Verify, $view->recommendation);
+            self::assertSame('draft', $view->ruleSetStatus);
+            self::assertNull($view->scoreMin);
+            self::assertCount(1, $view->breakdowns);
+            self::assertCount(1, $view->findings);
 
             try {
                 $service->save(

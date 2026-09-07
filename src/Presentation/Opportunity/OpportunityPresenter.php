@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Presentation\Opportunity;
 
+use App\Assessment\AssessmentQueryService;
 use App\Decision\OpportunityDecision;
 use App\Decision\OpportunityDecisionService;
 use App\Opportunity\OpportunityConflictException;
@@ -19,6 +20,7 @@ final class OpportunityPresenter extends SecuredPresenter
     public function __construct(
         private readonly OpportunityQueryService $opportunities,
         private readonly OpportunityDecisionService $decisions,
+        private readonly AssessmentQueryService $assessments,
     ) {
         parent::__construct();
     }
@@ -30,7 +32,10 @@ final class OpportunityPresenter extends SecuredPresenter
             $this->error('Nabídka nebyla nalezena.');
         }
         $this->opportunityId = $id;
-        $this->template->setParameters(['opportunity' => $opportunity]);
+        $this->template->setParameters([
+            'opportunity' => $opportunity,
+            'assessment' => $this->assessments->getCurrent($id),
+        ]);
 
         $form = $this->getComponent('decisionForm');
         if ($form instanceof Form && !$form->isSubmitted()) {

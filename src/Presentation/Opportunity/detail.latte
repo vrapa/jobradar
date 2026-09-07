@@ -21,6 +21,48 @@
     </div>
 </header>
 
+<section class="card shadow-sm mb-4 {if $assessment !== null}border-info-subtle{/if}" aria-labelledby="assessment-title">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 id="assessment-title" class="h5 mb-0">Posouzení a doporučení</h2>
+            <span n:if="$assessment !== null" class="badge {if $assessment->recommendation->value === 'react'}text-bg-success{elseif $assessment->recommendation->value === 'uninteresting'}text-bg-secondary{else}text-bg-warning{/if}">
+                {if $assessment->recommendation->value === 'react'}Doporučení: reagovat{elseif $assessment->recommendation->value === 'uninteresting'}Doporučení: nezajímavé{else}Doporučení: ověřit{/if}
+            </span>
+        </div>
+        <div n:if="$assessment === null" class="text-body-secondary">Nabídka zatím nemá uložené posouzení.</div>
+        <div n:if="$assessment !== null">
+            <p class="preserve-lines">{$assessment->summary}</p>
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-3"><div class="small text-body-secondary">Pokrytí</div><div class="fw-semibold">{$assessment->coverage * 100|number:0} %</div></div>
+                <div class="col-6 col-md-3"><div class="small text-body-secondary">Jistota</div><div class="fw-semibold">{$assessment->confidence * 100|number:0} %</div></div>
+                <div class="col-6 col-md-3"><div class="small text-body-secondary">Skóre</div><div class="fw-semibold">{if $assessment->scoreMin !== null}{$assessment->scoreMin}–{$assessment->scoreMax}{else}Bez schváleného skóre{/if}</div></div>
+                <div class="col-6 col-md-3"><div class="small text-body-secondary">Pravidla</div><div class="fw-semibold">{$assessment->ruleSetName} v{$assessment->ruleSetVersion}</div><span n:if="$assessment->ruleSetStatus === 'draft'" class="badge text-bg-light border">návrh</span></div>
+            </div>
+            <div n:if="count($assessment->findings) > 0" class="vstack gap-2 mb-3">
+                <div n:foreach="$assessment->findings as $finding" class="p-3 rounded border">
+                    <span class="badge {if $finding->type === 'blocker'}text-bg-danger{elseif $finding->type === 'strong_match'}text-bg-success{elseif $finding->type === 'question'}text-bg-warning{else}text-bg-light border{/if}">
+                        {if $finding->type === 'strong_match'}Silná shoda{elseif $finding->type === 'acceptable_gap'}Přijatelná mezera{elseif $finding->type === 'blocker'}Překážka{else}Otázka{/if}
+                    </span>
+                    <span class="small text-body-secondary ms-1">{$finding->severity}</span>
+                    <div class="mt-2 preserve-lines">{$finding->text}</div>
+                    <div n:if="$finding->evidenceReference !== null" class="small text-body-secondary mt-1">Podklad: {$finding->evidenceReference}</div>
+                </div>
+            </div>
+            <details n:if="count($assessment->breakdowns) > 0">
+                <summary class="fw-semibold version-summary">Rozklad posouzení</summary>
+                <div class="vstack gap-2 mt-2">
+                    <div n:foreach="$assessment->breakdowns as $breakdown" class="p-3 bg-body-tertiary rounded">
+                        <h3 class="h6">{$breakdown->area}{if $breakdown->scoreMin !== null} · {$breakdown->scoreMin}–{$breakdown->scoreMax} bodů{/if}</h3>
+                        <p class="mb-1 preserve-lines">{$breakdown->explanation}</p>
+                        <p n:if="$breakdown->evidence !== null" class="small text-body-secondary mb-0 preserve-lines">Podklad: {$breakdown->evidence}</p>
+                    </div>
+                </div>
+            </details>
+            <p class="small text-body-secondary mt-3 mb-0">Profil {$assessment->profileName} v{$assessment->profileVersion}; vytvořeno {$assessment->createdAt|date:'j. n. Y H:i'}{if $assessment->modelIdentifier !== null}; model {$assessment->modelIdentifier}{/if}.</p>
+        </div>
+    </div>
+</section>
+
 <section class="card shadow-sm mb-4 border-primary-subtle" aria-labelledby="decision-title">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
