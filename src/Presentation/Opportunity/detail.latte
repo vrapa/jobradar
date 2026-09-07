@@ -90,6 +90,23 @@
                 </div>
             </div>
         {/form}
+        <details n:if="count($decisionHistory) > 0" class="mt-4">
+            <summary class="fw-semibold version-summary">Historie rozhodnutí ({count($decisionHistory)})</summary>
+            <ol class="list-group list-group-numbered mt-2">
+                <li n:foreach="$decisionHistory as $event" class="list-group-item d-flex justify-content-between gap-3">
+                    <div>
+                        <div>
+                            {if $event->previousDecision->value === 'react'}K reakci{elseif $event->previousDecision->value === 'uninteresting'}Nezajímavé{else}Nerozhodnuto{/if}
+                            <span aria-hidden="true">→</span>
+                            <strong>{if $event->newDecision->value === 'react'}K reakci{elseif $event->newDecision->value === 'uninteresting'}Nezajímavé{else}Nerozhodnuto{/if}</strong>
+                        </div>
+                        <div n:if="$event->reasonLabel !== null" class="small text-body-secondary">Důvod: {$event->reasonLabel}</div>
+                        <div n:if="$event->note !== null" class="small preserve-lines mt-1">{$event->note}</div>
+                    </div>
+                    <time class="small text-body-secondary text-nowrap" datetime="{$event->createdAt|date:'c'}">{$event->createdAt|date:'j. n. Y H:i'}</time>
+                </li>
+            </ol>
+        </details>
     </div>
 </section>
 

@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Bootstrap;
 use App\Decision\OpportunityDecision;
 use App\Decision\OpportunityDecisionService;
+use App\Decision\DecisionQueryService;
 use App\Opportunity\OpportunityConflictException;
 use App\Opportunity\OpportunityImport;
 use App\Opportunity\OpportunityImportService;
@@ -26,6 +27,7 @@ final class OpportunityDecisionServiceTest extends TestCase
         $imports = $container->getByType(OpportunityImportService::class);
         $service = $container->getByType(OpportunityDecisionService::class);
         $queries = $container->getByType(OpportunityQueryService::class);
+        $decisionQueries = $container->getByType(DecisionQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = null;
         $opportunityId = null;
@@ -102,6 +104,12 @@ final class OpportunityDecisionServiceTest extends TestCase
                 $userId,
                 $opportunityId,
             ));
+            $history = $decisionQueries->history($userId, $opportunityId);
+            self::assertCount(3, $history);
+            self::assertSame(OpportunityDecision::Undecided, $history[0]->newDecision);
+            self::assertSame(OpportunityDecision::Uninteresting, $history[1]->newDecision);
+            self::assertSame('Nízká sazba', $history[1]->reasonLabel);
+            self::assertSame('Syntetická poznámka.', $history[1]->note);
 
             $this->expectException(OpportunityConflictException::class);
             $service->setManualDecision($userId, $opportunityId, 1, OpportunityDecision::React);

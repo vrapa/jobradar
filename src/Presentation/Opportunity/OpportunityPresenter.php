@@ -7,6 +7,7 @@ namespace App\Presentation\Opportunity;
 use App\Assessment\AssessmentQueryService;
 use App\Decision\OpportunityDecision;
 use App\Decision\OpportunityDecisionService;
+use App\Decision\DecisionQueryService;
 use App\Opportunity\OpportunityConflictException;
 use App\Opportunity\OpportunityQueryService;
 use App\Presentation\SecuredPresenter;
@@ -21,6 +22,7 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly OpportunityQueryService $opportunities,
         private readonly OpportunityDecisionService $decisions,
         private readonly AssessmentQueryService $assessments,
+        private readonly DecisionQueryService $decisionQueries,
     ) {
         parent::__construct();
     }
@@ -35,6 +37,7 @@ final class OpportunityPresenter extends SecuredPresenter
         $this->template->setParameters([
             'opportunity' => $opportunity,
             'assessment' => $this->assessments->getCurrent($id),
+            'decisionHistory' => $this->decisionQueries->history((int) $this->getUser()->getId(), $id),
         ]);
 
         $form = $this->getComponent('decisionForm');

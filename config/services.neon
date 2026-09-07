@@ -19,6 +19,7 @@ services:
 	- App\Opportunity\OpportunityTermsService
 	- App\Opportunity\OpportunityJsonMapper
 	- App\Decision\OpportunityDecisionService
+	- App\Decision\DecisionQueryService
 	- App\Assessment\AssessmentService
 	- App\Assessment\AssessmentQueryService
 	- App\Assessment\AssessmentConfigurationMapper
