@@ -44,6 +44,10 @@ final class SourcesHandler extends BaseHandler
                     'intervention_required' => $source->interventionRequired,
                     'login_url' => $source->loginUrl,
                 ],
+                'last_attempt_at' => $source->lastAttemptAt?->format(DATE_ATOM),
+                'last_success_at' => $source->lastSuccessAt?->format(DATE_ATOM),
+                'last_found_at' => $source->lastFoundAt?->format(DATE_ATOM),
+                'stale' => $source->stale,
             ],
             $this->sources->activeCheckableSources(),
         );

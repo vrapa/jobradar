@@ -10,6 +10,7 @@ use App\Search\SearchRequestService;
 use App\Search\SearchRunService;
 use App\Search\SourceRunResult;
 use App\Search\SourceRunScope;
+use App\Search\SourceQueryService;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
 
@@ -25,6 +26,7 @@ final class RunnerLeaseServiceTest extends TestCase
         $requests = $container->getByType(SearchRequestService::class);
         $leases = $container->getByType(RunnerLeaseService::class);
         $runs = $container->getByType(SearchRunService::class);
+        $queries = $container->getByType(SourceQueryService::class);
         $unique = bin2hex(random_bytes(8));
         $userId = $sourceId = $deviceId = $requestId = $runId = null;
 
@@ -117,6 +119,20 @@ final class RunnerLeaseServiceTest extends TestCase
                 $sourceId,
             ));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
+            $sourceViews = array_values(array_filter(
+                $queries->activeCheckableSources(),
+                static fn ($source): bool => $source->id === $sourceId,
+            ));
+            self::assertCount(1, $sourceViews);
+            self::assertNotNull($sourceViews[0]->lastAttemptAt);
+            self::assertNotNull($sourceViews[0]->lastSuccessAt);
+            self::assertNull($sourceViews[0]->lastFoundAt);
+            $coverage = $queries->latestCoverageSummary($userId);
+            self::assertNotNull($coverage);
+            self::assertSame(1, $coverage->plannedCount);
+            self::assertSame(1, $coverage->completeCount);
+            self::assertSame(0, $coverage->loginRequiredCount);
+            self::assertSame(0, $coverage->errorCount);
             try {
                 $leases->renew($deviceId, $requestId, $lease->token);
                 self::fail('Dokončený běh nesmí obnovit lease.');

@@ -41,6 +41,12 @@
                     </div>
                     <a href="{$source->url}" rel="noopener noreferrer" target="_blank" class="small">Otevřít zdroj</a>
                     <span n:if="$source->recommendedFrequencyHours !== null" class="small text-body-secondary ms-2">Doporučeno po {$source->recommendedFrequencyHours} h</span>
+                    <span n:if="$source->stale" class="badge text-bg-warning ms-2">Zastaralý</span>
+                    <div class="row g-2 mt-2 small">
+                        <div class="col-12 col-sm-4"><span class="text-body-secondary">Poslední pokus:</span> {$source->lastAttemptAt !== null ? ($source->lastAttemptAt|date:'j. n. Y H:i') : 'nikdy'}</div>
+                        <div class="col-12 col-sm-4"><span class="text-body-secondary">Úplný úspěch:</span> {$source->lastSuccessAt !== null ? ($source->lastSuccessAt|date:'j. n. Y H:i') : 'nikdy'}</div>
+                        <div class="col-12 col-sm-4"><span class="text-body-secondary">Poslední nález:</span> {$source->lastFoundAt !== null ? ($source->lastFoundAt|date:'j. n. Y H:i') : 'žádný'}</div>
+                    </div>
                 </div></article>
             </div>
         </section>

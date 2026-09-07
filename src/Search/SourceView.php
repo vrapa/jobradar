@@ -18,6 +18,10 @@ final readonly class SourceView
         public ?\DateTimeInterface $accessVerifiedAt,
         public bool $interventionRequired,
         public ?string $loginUrl,
+        public ?\DateTimeInterface $lastAttemptAt,
+        public ?\DateTimeInterface $lastSuccessAt,
+        public ?\DateTimeInterface $lastFoundAt,
+        public bool $stale,
     ) {
     }
 }

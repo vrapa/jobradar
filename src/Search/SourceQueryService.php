@@ -29,12 +29,33 @@ final class SourceQueryService
                 accessVerifiedAt: self::nullableDateTime($row['verified_at']),
                 interventionRequired: (bool) ($row['intervention_required'] ?? false),
                 loginUrl: self::nullableString($row['login_url']),
+                lastAttemptAt: self::nullableDateTime($row['last_attempt_at']),
+                lastSuccessAt: self::nullableDateTime($row['last_success_at']),
+                lastFoundAt: self::nullableDateTime($row['last_found_at']),
+                stale: self::isStale(
+                    $row['recommended_frequency_hours'] === null ? null : (int) $row['recommended_frequency_hours'],
+                    self::nullableDateTime($row['last_success_at']),
+                ),
             ),
             $this->database->fetchAll(
-                'SELECT s.*, access.access_status, access.verified_at, access.intervention_required, access.login_url
-                 FROM sources s LEFT JOIN source_access_states access ON access.source_id = s.id
+                'SELECT s.*, access.access_status, access.verified_at, access.intervention_required, access.login_url,
+                        history.last_attempt_at, history.last_success_at, found.last_found_at
+                 FROM sources s
+                 LEFT JOIN source_access_states access ON access.source_id = s.id
+                 LEFT JOIN (
+                    SELECT source_id, MAX(started_at) AS last_attempt_at,
+                           MAX(CASE WHEN source_status = ? THEN finished_at END) AS last_success_at
+                    FROM search_run_sources GROUP BY source_id
+                 ) history ON history.source_id = s.id
+                 LEFT JOIN (
+                    SELECT run_source.source_id, MAX(found.created_at) AS last_found_at
+                    FROM search_run_opportunities found
+                    INNER JOIN search_run_sources run_source ON run_source.id = found.search_run_source_id
+                    GROUP BY run_source.source_id
+                 ) found ON found.source_id = s.id
                  WHERE s.active = 1 AND s.archived_at IS NULL AND s.source_type <> ?
                  ORDER BY s.priority, s.name',
+                'complete',
                 'manual',
             ),
         );
@@ -142,6 +163,36 @@ final class SourceQueryService
         );
     }
 
+    public function latestCoverageSummary(int $userId): ?SearchCoverageSummary
+    {
+        $latestId = $this->database->fetchField(
+            'SELECT id FROM search_requests WHERE requested_by_user_id = ? ORDER BY requested_at DESC, id DESC LIMIT 1',
+            $userId,
+        );
+        if ($latestId === null) {
+            return null;
+        }
+        $request = $this->getRequestDetail($userId, (int) $latestId);
+        if ($request === null) {
+            return null;
+        }
+        return new SearchCoverageSummary(
+            requestId: $request->id,
+            status: $request->status,
+            plannedCount: count($request->sources),
+            completeCount: $request->checkedSourceCount(),
+            loginRequiredCount: count(array_filter(
+                $request->sources,
+                static fn (SearchRunSourceView $source): bool => $source->loginRequired,
+            )),
+            errorCount: count(array_filter(
+                $request->sources,
+                static fn (SearchRunSourceView $source): bool => $source->status === 'error',
+            )),
+            requestedAt: $request->requestedAt,
+        );
+    }
+
     private static function nullableString(mixed $value): ?string
     {
         return $value === null || $value === '' ? null : (string) $value;
@@ -163,5 +214,17 @@ final class SourceQueryService
     private static function nullableDateTime(mixed $value): ?\DateTimeInterface
     {
         return $value === null ? null : self::dateTime($value);
+    }
+
+    private static function isStale(?int $frequencyHours, ?\DateTimeInterface $lastSuccessAt): bool
+    {
+        if ($frequencyHours === null) {
+            return false;
+        }
+        if ($lastSuccessAt === null) {
+            return true;
+        }
+        $threshold = new \DateTimeImmutable(sprintf('-%d hours', $frequencyHours), new \DateTimeZone('UTC'));
+        return $lastSuccessAt < $threshold;
     }
 }

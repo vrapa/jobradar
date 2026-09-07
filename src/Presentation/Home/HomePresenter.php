@@ -6,11 +6,14 @@ namespace App\Presentation\Home;
 
 use App\Opportunity\OpportunityQueryService;
 use App\Presentation\SecuredPresenter;
+use App\Search\SourceQueryService;
 
 final class HomePresenter extends SecuredPresenter
 {
-    public function __construct(private readonly OpportunityQueryService $opportunities)
-    {
+    public function __construct(
+        private readonly OpportunityQueryService $opportunities,
+        private readonly SourceQueryService $sourceQueries,
+    ) {
         parent::__construct();
     }
 
@@ -20,6 +23,7 @@ final class HomePresenter extends SecuredPresenter
         $this->template->setParameters([
             'opportunities' => $items,
             'opportunityCount' => count($items),
+            'coverage' => $this->sourceQueries->latestCoverageSummary((int) $this->getUser()->getId()),
         ]);
     }
 
