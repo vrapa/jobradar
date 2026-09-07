@@ -30,3 +30,4 @@ services:
 	- App\Search\RunnerLeaseService
 	- App\Search\SearchRunService
 	- App\Search\SearchRequestControlService
+	- App\Api\Auth\ApiCredentialService

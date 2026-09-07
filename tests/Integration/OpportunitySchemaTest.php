@@ -34,6 +34,8 @@ final class OpportunitySchemaTest extends TestCase
     public function testCatalogTablesExist(): void
     {
         $expected = [
+            'api_access_tokens',
+            'api_clients',
             'companies',
             'candidate_profiles',
             'duplicate_candidates',
