@@ -73,6 +73,13 @@ final class OpportunitySchemaTest extends TestCase
         foreach ($expected as $table) {
             self::assertContains($table, $actual);
         }
+
+        $runnerColumns = $this->database->query(
+            "SELECT column_name FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = 'runner_devices'",
+        );
+        self::assertInstanceOf(PDOStatement::class, $runnerColumns);
+        self::assertContains('api_client_id', $runnerColumns->fetchAll(PDO::FETCH_COLUMN));
     }
 
     public function testUnknownTermsRemainNullable(): void

@@ -36,9 +36,9 @@ final class CreateApiClientCommandTest extends TestCase
             $tester = new CommandTester($command);
             $status = $tester->execute([
                 'actor-email' => $email,
-                'name' => 'Synthetic CLI MCP ' . $unique,
-                'type' => 'mcp',
-                '--scope' => ['sources:read', 'opportunities:read'],
+                'name' => 'Synthetic CLI runner ' . $unique,
+                'type' => 'runner',
+                '--scope' => ['sources:read', 'search:write'],
                 '--days' => '7',
             ]);
 
@@ -46,8 +46,12 @@ final class CreateApiClientCommandTest extends TestCase
             self::assertSame(1, preg_match('/\bjr_[A-Za-z0-9_-]+\b/', $tester->getDisplay(), $matches));
             $rawToken = $matches[0] ?? null;
             self::assertIsString($rawToken);
-            $clientId = (int) $database->fetchField('SELECT id FROM api_clients WHERE name = ?', 'Synthetic CLI MCP ' . $unique);
+            $clientId = (int) $database->fetchField('SELECT id FROM api_clients WHERE name = ?', 'Synthetic CLI runner ' . $unique);
             self::assertGreaterThan(0, $clientId);
+            self::assertSame($clientId, (int) $database->fetchField(
+                'SELECT api_client_id FROM runner_devices WHERE api_client_id = ?',
+                $clientId,
+            ));
             self::assertSame(hash('sha256', $rawToken), $database->fetchField(
                 'SELECT token_hash FROM api_access_tokens WHERE api_client_id = ?',
                 $clientId,
@@ -59,6 +63,7 @@ final class CreateApiClientCommandTest extends TestCase
             ));
         } finally {
             if ($clientId !== null) {
+                $database->query('DELETE FROM runner_devices WHERE api_client_id = ?', $clientId);
                 $database->query('DELETE FROM api_access_tokens WHERE api_client_id = ?', $clientId);
                 $database->query('DELETE FROM api_clients WHERE id = ?', $clientId);
             }

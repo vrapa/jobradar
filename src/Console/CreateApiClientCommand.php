@@ -69,6 +69,16 @@ final class CreateApiClientCommand extends Command
             /** @var array{client: ApiClientRegistration, token: ApiTokenIssue} $created */
             $created = $this->database->transaction(function () use ($actor, $input, $type, $scopes, $days): array {
                 $client = $this->credentials->createClient((int) $actor['id'], (string) $input->getArgument('name'), $type);
+                if ($type === 'runner') {
+                    $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+                    $this->database->query('INSERT INTO runner_devices', [
+                        'api_client_id' => $client->id,
+                        'public_identifier' => $client->publicIdentifier,
+                        'name' => (string) $input->getArgument('name'),
+                        'device_status' => 'inactive',
+                        'created_at' => $now,
+                    ]);
+                }
                 $token = $this->credentials->issueToken(
                     (int) $actor['id'],
                     $client->id,

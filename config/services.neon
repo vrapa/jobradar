@@ -31,6 +31,7 @@ services:
 	- App\Search\RunnerLeaseService
 	- App\Search\SearchRunService
 	- App\Search\SearchRequestControlService
+	- App\Search\RunnerDeviceService
 	- App\Api\Auth\ApiCredentialService
 	- App\Api\Auth\ApiRequestContext
 	- App\Api\V1\SourcesHandler
