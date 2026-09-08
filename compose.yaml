@@ -39,7 +39,7 @@ services:
       DB_USER: ${DB_USER:-jobradar}
       DB_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
     ports:
-      - "127.0.0.1:${APP_PORT:-8080}:80"
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:80"
     volumes:
       - application-runtime:/var/www/html/var
 
