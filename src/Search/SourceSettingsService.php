@@ -43,9 +43,10 @@ final class SourceSettingsService
         return (array) $row;
     }
 
-    public function save(int $actor, int $id, int $version, string $priority, ?string $name = null, ?string $query = null, bool $active = true): void
+    /** @param array<mixed>|null $tags */
+    public function save(int $actor, int $id, int $version, string $priority, ?string $name = null, ?string $query = null, bool $active = true, ?array $tags = null): void
     {
-        $this->db->transaction(function () use ($actor, $id, $version, $priority, $name, $query, $active): void {
+        $this->db->transaction(function () use ($actor, $id, $version, $priority, $name, $query, $active, $tags): void {
             if (!$this->db->fetchField("SELECT id FROM users WHERE id = ? AND role = 'admin' AND deactivated_at IS NULL", $actor)) {
                 throw new \InvalidArgumentException('Změny zdrojů smí provádět pouze administrátor.');
             }
@@ -54,6 +55,11 @@ final class SourceSettingsService
                 throw new \InvalidArgumentException('Zdroj se změnil nebo není dostupný. Obnovte stránku a změnu zopakujte.');
             }
             if (!in_array($priority, ['A','B','C'], true)) { throw new \InvalidArgumentException('Neplatná priorita.'); }
+            if ($tags !== null) {
+                if (!array_is_list($tags) || array_any($tags, static fn ($tag): bool => !is_string($tag)) || array_diff($tags, array_keys(SearchPlan::TAGS)) !== []) { throw new \InvalidArgumentException('Neplatné zaměření zdroje.'); }
+                $this->db->query('UPDATE sources SET purpose_tags_json=? WHERE id=?', json_encode(array_values(array_unique($tags)), JSON_THROW_ON_ERROR), $id);
+                $this->audit->record('source.purpose_saved', $actor, ['source_id' => $id, 'old_tags' => $source['purpose_tags_json'], 'new_tags' => json_encode($tags, JSON_THROW_ON_ERROR)]);
+            }
             if ($name !== null && trim($name) !== '') {
                 if ($source['source_type'] !== 'manual_search' || mb_strlen($name) > 255 || trim((string) $query) === '' || mb_strlen((string) $query) > 2000) {
                     throw new \InvalidArgumentException('Neplatný ruční dotaz.');
@@ -66,6 +72,24 @@ final class SourceSettingsService
             }
             $this->db->query('UPDATE sources SET priority = ?, lock_version = lock_version + 1, updated_at = ? WHERE id = ?', $priority, new \DateTimeImmutable(), $id);
             $this->audit->record('source.priority_saved', $actor, ['source_id' => $id, 'old_priority' => (string) $source['priority'], 'new_priority' => $priority]);
+        });
+    }
+
+    public function savePlan(int $actor, int $id, int $version, string $stepsJson, int $limit, string $guidance, string $verification): void
+    {
+        $steps = SearchPlan::parse($stepsJson, $limit);
+        if (trim($verification) === '' || mb_strlen($verification) > 2000 || mb_strlen($guidance) > 10000) { throw new \InvalidArgumentException('Doplňte doložení podporovaných dotazů a filtrů (nejvýše 2000 znaků).'); }
+        $this->db->transaction(function () use ($actor, $id, $version, $steps, $limit, $guidance, $verification): void {
+            $source = $this->get($id);
+            if (in_array($source['source_type'], ['manual','manual_search'], true)) { throw new \InvalidArgumentException('Ruční zdroj nemá vykonávací zadání.'); }
+            // Same domain authorization and optimistic source lock as priority edits.
+            $this->save($actor, $id, $version, (string) $source['priority']);
+            $old = $this->db->fetch('SELECT * FROM source_search_definitions WHERE source_id=? AND active=1 AND archived_at IS NULL ORDER BY version DESC,id DESC LIMIT 1', $id);
+            $name = $old['name'] ?? 'Společné zadání';
+            $next = 1 + (int) $this->db->fetchField('SELECT MAX(version) FROM source_search_definitions WHERE source_id=? AND name=?', $id, $name);
+            $this->db->query('UPDATE source_search_definitions SET active=0 WHERE source_id=?', $id);
+            $this->db->query('INSERT INTO source_search_definitions', ['source_id' => $id, 'name' => $name, 'version' => $next, 'query_text' => $steps[0]['query'], 'filters_json' => json_encode($steps[0]['filters'], JSON_THROW_ON_ERROR), 'steps_json' => json_encode($steps, JSON_THROW_ON_ERROR), 'result_limit' => $limit, 'pagination_strategy' => $old['pagination_strategy'] ?? null, 'review_guidance' => $guidance, 'active' => true, 'created_at' => new \DateTimeImmutable()]);
+            $this->audit->record('source.plan_version_created', $actor, ['source_id' => $id, 'definition_id' => (int) $this->db->getInsertId(), 'previous_definition_id' => $old['id'] ?? null, 'verification' => trim($verification)]);
         });
     }
 }

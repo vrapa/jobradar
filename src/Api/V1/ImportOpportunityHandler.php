@@ -44,6 +44,7 @@ final class ImportOpportunityHandler extends BaseHandler
                 'sourceLanguage' => ['type' => ['string', 'null'], 'maxLength' => 16],
                 'incomplete' => ['type' => 'boolean'],
                 'projectCare' => \App\Opportunity\ProjectCareInput::schema(),
+                'counterparty' => \App\Opportunity\CounterpartyInput::schema(),
                 'discoveryDefinitionId' => ['type' => ['integer','null'], 'minimum' => 1],
             ],
         ], JSON_THROW_ON_ERROR)))->setRequired()];

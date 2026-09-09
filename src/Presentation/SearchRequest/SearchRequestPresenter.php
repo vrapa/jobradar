@@ -18,6 +18,7 @@ final class SearchRequestPresenter extends SecuredPresenter
         private readonly SourceQueryService $queries,
         private readonly SearchRequestControlService $controls,
         private readonly \App\Search\AccessPreparationService $preparation,
+        private readonly \App\Search\SearchStepService $steps,
     ) {
         parent::__construct();
     }
@@ -29,6 +30,7 @@ final class SearchRequestPresenter extends SecuredPresenter
             $this->error('Kontrola nebyla nalezena.');
         }
         $this->requestId = $id;
+        $this->template->setParameters(['searchPlans' => $this->steps->requestPlans((int) $this->getUser()->getId(), $id)]);
         $this->template->setParameters(['request' => $request, 'preparation' => $this->preparation->status((int) $this->getUser()->getId(), $id)]);
     }
 

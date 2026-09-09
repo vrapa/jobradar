@@ -25,6 +25,7 @@ final class ExecutionService
         private readonly OpportunityImportService $importer,
         private readonly AssessmentPayloadMapper $assessmentMapper,
         private readonly AssessmentService $assessments,
+        private readonly SearchStepService $steps,
     ) {
     }
 
@@ -122,6 +123,7 @@ final class ExecutionService
                 throw new \InvalidArgumentException('Zápis vyžaduje zahájený zdroj.');
             }
             if ($operation === 'finish' && ($payload['status'] ?? '') === 'complete') {
+                $this->steps->assertFinished((int) $source['id'], $payload['displayed_count'] ?? null);
                 $definition = $this->database->fetchField('SELECT search_definition_id FROM search_request_sources WHERE search_request_id = ? AND source_id = ?', $run['search_request_id'], $source['source_id']);
                 if ($source['checkpoint_json'] === null || $definition === null || $run['candidate_profile_id'] === null || $run['scoring_rule_set_id'] === null) {
                     throw new \InvalidArgumentException('Úplný průchod vyžaduje uložené zadání, profil, pravidla a doložený checkpoint.');
@@ -146,7 +148,7 @@ final class ExecutionService
     private function task(Row $run, ApiIdentity $identity): array
     {
         $sources = $this->database->fetchAll(
-            'SELECT s.id, s.name, s.url, rs.source_status, rs.query_text, rs.filters_json, rs.checkpoint_json, rs.checkpoint_at,
+            'SELECT s.id, s.name, s.url, rs.id AS run_source_id, rs.source_status, rs.query_text, rs.filters_json, rs.checkpoint_json, rs.checkpoint_at,
                     d.query_text AS search_query, d.filters_json AS search_filters, d.result_limit, d.pagination_strategy, d.review_guidance
              FROM search_run_sources rs JOIN sources s ON s.id = rs.source_id
              JOIN search_request_sources qs ON qs.source_id = s.id AND qs.search_request_id = ?
@@ -158,13 +160,15 @@ final class ExecutionService
         $assessmentSchema['required'][] = 'opportunityId';
         unset($assessmentSchema['properties']['idempotencyKey']);
         $assessmentSchema['properties']['opportunityId'] = ['type' => 'integer', 'minimum' => 1];
+        $opportunitySchema = \App\Mcp\JobRadarMcpServerFactory::opportunitySchema();
+        $opportunitySchema['properties']['searchStep'] = ['type' => 'string', 'description' => 'Required for multi-step plans: key of the running step.'];
         return ['run_id' => (int) $run['id'], 'request_id' => (int) $run['search_request_id'],
             'prepare_access' => (bool) $run['prepare_access'] && $run['access_confirmed_at'] === null,
             'browser_session_name' => '💼 Práce',
             'access_preparations' => array_map(static fn ($r): array => (array) $r, $this->database->fetchAll('SELECT source_id,access_status FROM search_access_preparations WHERE search_request_id = ?', $run['search_request_id'])),
-            'schemas' => ['opportunity' => \App\Mcp\JobRadarMcpServerFactory::opportunitySchema(), 'assessment' => $assessmentSchema],
+            'schemas' => ['opportunity' => $opportunitySchema, 'assessment' => $assessmentSchema],
             'imported_opportunities' => array_map(static fn (Row $row): array => (array) $row, $this->database->fetchAll('SELECT ro.search_run_source_id, rs.source_id, o.id, o.lock_version, o.canonical_url FROM search_run_opportunities ro JOIN search_run_sources rs ON rs.id = ro.search_run_source_id JOIN opportunities o ON o.id = ro.opportunity_id WHERE ro.search_run_id = ?', $run['id'])),
-            'sources' => array_map(static fn (Row $row): array => (array) $row, $sources),
+            'sources' => array_map(fn (Row $row): array => [...(array) $row, 'search_plan' => $this->steps->state((int) $row['run_source_id'])], $sources),
             'profile' => $run['candidate_profile_id'] === null ? null : (array) $this->database->fetch('SELECT id, version, description, parameters_json FROM candidate_profiles WHERE id = ? AND created_by_user_id = ?', $run['candidate_profile_id'], $identity->ownerUserId),
             'rules' => $run['scoring_rule_set_id'] === null ? null : (array) $this->database->fetch('SELECT id, status, rules_json, description FROM scoring_rule_sets WHERE id = ? AND created_by_user_id = ?', $run['scoring_rule_set_id'], $identity->ownerUserId),
             'instructions' => 'Missing search definition or profile means configuration is required. Never invent scope or a matching profile.',
@@ -194,7 +198,7 @@ final class ExecutionService
      */
     private function checkpoint(Row $source, array $payload): array
     {
-        if (array_diff(array_keys($payload), ['url', 'page', 'completed_unit', 'pages_traversed', 'detail_opened_count']) !== []
+        if (array_diff(array_keys($payload), ['url', 'page', 'completed_unit', 'pages_traversed', 'detail_opened_count', 'step_key', 'step_status', 'step_displayed_count', 'step_completion_reason']) !== []
             || !is_string($payload['completed_unit'] ?? null) || trim($payload['completed_unit']) === '' || strlen($payload['completed_unit']) > 2000) {
             throw new \InvalidArgumentException('Checkpoint vyžaduje stručnou dokončenou jednotku a známá pole.');
         }
@@ -213,6 +217,7 @@ final class ExecutionService
                 throw new \InvalidArgumentException('Checkpoint nesmí ukládat autentizační URL ani fragmenty.');
             }
         }
+        $this->steps->checkpoint((int) $source['id'], $payload);
         $this->database->query('UPDATE search_run_sources SET checkpoint_json = ?, checkpoint_at = ? WHERE id = ?', json_encode($payload, JSON_THROW_ON_ERROR), new \DateTimeImmutable(), $source['id']);
         return ['checkpoint_saved' => true];
     }
@@ -223,11 +228,14 @@ final class ExecutionService
      */
     private function import(Row $source, array $payload, ApiIdentity $identity): array
     {
+        $stepId = $this->steps->importStep((int) $source['id'], $payload['searchStep'] ?? null);
+        unset($payload['searchStep']);
         $imports = $this->imports->map(json_encode($payload, JSON_THROW_ON_ERROR));
         if (count($imports) !== 1) {
             throw new \InvalidArgumentException('Import vyžaduje jednu nabídku.');
         }
         $result = $this->importer->import($imports[0], $identity->ownerUserId, (int) $source['source_id']);
+        if ($stepId !== null) { $this->steps->linkImport((int) $source['id'], $stepId, $result->opportunityId); }
         $this->database->query('INSERT IGNORE INTO search_run_opportunities', [
             'search_run_id' => $source['search_run_id'], 'search_run_source_id' => $source['id'], 'opportunity_id' => $result->opportunityId,
             'processing_result' => $result->opportunityCreated ? 'created' : ($result->versionCreated ? 'updated' : 'duplicate'), 'created_at' => new \DateTimeImmutable(),

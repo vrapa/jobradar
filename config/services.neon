@@ -32,6 +32,7 @@ services:
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\ProjectCareService
+	- App\Opportunity\CounterpartyService
 	- App\Opportunity\OpportunityQueryService
 	- App\Opportunity\OpportunityTermsService
 	- App\Opportunity\OpportunityJsonMapper
@@ -52,6 +53,7 @@ services:
 	- App\Search\SearchRequestControlService
 	- App\Search\RunnerDeviceService
 	- App\Search\ExecutionService
+	- App\Search\SearchStepService
 	- App\Api\V1\ExecutionHandler
 	- App\Api\Auth\ApiCredentialService
 	- App\Api\Auth\ApiRequestContext

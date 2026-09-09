@@ -17,6 +17,7 @@ final class OpportunityImportService
         private readonly UrlNormalizer $urlNormalizer,
         private readonly AuditLogger $auditLogger,
         private readonly ProjectCareService $projectCare,
+        private readonly CounterpartyService $counterparties,
     ) {
     }
 
@@ -113,6 +114,9 @@ final class OpportunityImportService
             }
             if ($import->discoveryDefinitionId !== null) {
                 $this->database->query('INSERT IGNORE INTO opportunity_discoveries', ['opportunity_id' => $opportunityId, 'search_definition_id' => $import->discoveryDefinitionId, 'discovered_at' => $now]);
+            }
+            if ($import->counterparty !== null) {
+                $this->counterparties->save($opportunityId, (int) $this->database->fetchField('SELECT lock_version FROM opportunities WHERE id=?', $opportunityId), $import->counterparty, $actorUserId, $versionId);
             }
             $this->auditLogger->record($sourceId === null ? 'opportunity.manual_imported' : 'opportunity.source_imported', $actorUserId, [
                 'opportunity_id' => $opportunityId,

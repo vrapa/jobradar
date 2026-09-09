@@ -12,9 +12,10 @@
     </div>
 </header>
 
-<form method="get" class="d-flex gap-2 align-items-center mb-3">
+<form method="get" class="d-flex flex-wrap gap-2 align-items-center mb-3">
     <label for="care">Převzetí / péče o existující aplikaci</label>
     <select id="care" name="care" class="form-select w-auto"><option value="all" selected={$care === 'all'}>Vše</option><option value="yes" selected={$care === 'yes'}>Ano</option><option value="no" selected={$care === 'no'}>Ne</option><option value="unknown" selected={$care === 'unknown'}>Neověřeno</option></select>
+    <label for="party">Protistrana</label><select id="party" name="party" class="form-select w-auto"><option value="all" selected={$party === 'all'}>Všechny</option><option value="unknown" selected={$party === 'unknown'}>Neověřeno</option><option n:foreach="App\Opportunity\CounterpartyInput::LABELS as $key => $label" value="{$key}" selected={$party === $key}>{$label}</option></select>
     <button type="submit" class="btn btn-outline-primary">Filtrovat</button>
 </form>
 <div id="execution-status" data-execution-poll>

@@ -13,6 +13,7 @@ final readonly class OpportunityDetail
      * @param list<TechnologyView> $technologies
      * @param list<array<string, mixed>> $projectCareHistory
      * @param list<array<string, mixed>> $discoveries
+     * @param list<array<string, mixed>> $counterpartyHistory
      */
     public function __construct(
         public int $id,
@@ -37,6 +38,7 @@ final readonly class OpportunityDetail
         public DecisionStateView $decisionState,
         public array $projectCareHistory = [],
         public array $discoveries = [],
+        public array $counterpartyHistory = [],
     ) {
     }
 }

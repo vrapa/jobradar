@@ -30,10 +30,14 @@ final class HomePresenter extends SecuredPresenter
         $care = (string) ($this->getParameter('care') ?? 'all');
         if (!in_array($care, ['all','yes','no','unknown'], true)) { $care = 'all'; }
         if ($care !== 'all') { $items = array_values(array_filter($items, static fn ($o): bool => $o->projectCare === match ($care) { 'yes' => true, 'no' => false, default => null })); }
+        $party = (string) ($this->getParameter('party') ?? 'all');
+        if (!in_array($party, ['all','unknown','owner','supplier','recruiter'], true)) { $party = 'all'; }
+        if ($party !== 'all') { $items = array_values(array_filter($items, static fn ($o): bool => $o->counterparty === ($party === 'unknown' ? null : $party))); }
         $this->template->setParameters([
             'opportunities' => $items,
             'opportunityCount' => count($items),
             'care' => $care,
+            'party' => $party,
             'coverage' => $this->sourceQueries->latestCoverageSummary((int) $this->getUser()->getId()),
             'unresolvedSources' => $this->sourceQueries->unresolvedSources((int) $this->getUser()->getId()),
             'executor' => $this->sourceQueries->executorStatus((int) $this->getUser()->getId()),

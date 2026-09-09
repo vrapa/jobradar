@@ -24,6 +24,7 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly AssessmentQueryService $assessments,
         private readonly DecisionQueryService $decisionQueries,
         private readonly \App\Opportunity\ProjectCareService $projectCare,
+        private readonly \App\Opportunity\CounterpartyService $counterparty,
     ) {
         parent::__construct();
     }
@@ -69,6 +70,31 @@ final class OpportunityPresenter extends SecuredPresenter
         $form->onSuccess[] = function (Form $form): void {
             $v = (array) $form->getValues();
             try { $this->projectCare->save($this->opportunityId, (int) $v['lockVersion'], \App\Opportunity\ProjectCareForm::read($v), (int) $this->getUser()->getId()); }
+            catch (\InvalidArgumentException|OpportunityConflictException $e) { $form->addError($e->getMessage()); return; }
+            $this->flashMessage('Klasifikace uložena do historie.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
+    protected function createComponentCounterpartyForm(): Form
+    {
+        $opportunity = $this->opportunities->getDetail($this->opportunityId, (int) $this->getUser()->getId());
+        if ($opportunity === null) { $this->error('Nabídka nenalezena.'); }
+        $form = new Form();
+        $form->addHidden('lockVersion', (string) $opportunity->lockVersion);
+        \App\Opportunity\CounterpartyForm::add($form);
+        $latest = $opportunity->counterpartyHistory[0] ?? null;
+        $form->onAnchor[] = static function (Form $form) use ($latest): void {
+            if (!$form->isSubmitted() && $latest !== null) {
+                $form->setDefaults(['counterpartyValue' => $latest['value'] ?? '', 'counterpartyReason' => $latest['reason'], 'counterpartyConfidence' => $latest['confidence']]);
+            }
+        };
+        $form->addProtection();
+        $form->addSubmit('send', 'Uložit klasifikaci');
+        $form->onSuccess[] = function (Form $form): void {
+            $v = (array) $form->getValues();
+            try { $this->counterparty->save($this->opportunityId, (int) $v['lockVersion'], \App\Opportunity\CounterpartyForm::read($v), (int) $this->getUser()->getId()); }
             catch (\InvalidArgumentException|OpportunityConflictException $e) { $form->addError($e->getMessage()); return; }
             $this->flashMessage('Klasifikace uložena do historie.', 'success');
             $this->redirect('this');

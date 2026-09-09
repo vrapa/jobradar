@@ -49,7 +49,9 @@
                         <span class="badge {$source->accessStatus === 'available' ? 'text-bg-success' : ($source->interventionRequired ? 'text-bg-warning' : 'text-bg-light border')}">{$source->accessStatus === 'unknown' ? 'Přístup neověřen' : $source->accessStatus}</span>
                     </div>
                     <a href="{$source->url}" rel="noopener noreferrer" target="_blank" class="small">Otevřít zdroj</a>
-                    <a n:if="$user->isInRole('admin')" n:href="SourceSettings:default $source->id" class="small ms-2">Upravit prioritu</a>
+                    <a n:if="$user->isInRole('admin')" n:href="SourceSettings:default $source->id" class="small ms-2">Upravit zdroj a zadání</a>
+                    <span n:foreach="$sourcePurposes[$source->id] as $tag" class="badge text-bg-light border ms-1">{App\Search\SearchPlan::TAGS[$tag] ?? $tag}</span>
+                    <details n:foreach="$definitions[$source->id] as $d" n:if="$d['active'] && $d['steps_json'] !== null" class="mt-2"><summary>Kroky hledání · verze {$d['version']} · společný limit {$d['result_limit']}</summary><ol><li n:foreach="json_decode($d['steps_json'], true) as $step"><strong>{$step['name']}</strong>: {$step['query']} · dílčí limit {$step['limit']}<pre class="text-wrap small">{json_encode($step['filters'], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT)}</pre></li></ol></details>
                     <details class="mt-2"><summary>Zadání kontroly</summary><div n:foreach="$definitions[$source->id] as $d" n:if="$d['active']"><p>{$d['query_text']}</p><p n:if="$d['review_guidance'] !== null" class="small">{$d['review_guidance']}</p><small>Limit: {$d['result_limit'] ?? 'neuveden'} · verze {$d['version']}</small></div></details>
                     <span n:if="$source->recommendedFrequencyHours !== null" class="small text-body-secondary ms-2">Doporučeno po {$source->recommendedFrequencyHours} h</span>
                     <span n:if="$source->stale" class="badge text-bg-warning ms-2">Zastaralý</span>

@@ -2,6 +2,8 @@
 
 The saved source search definition is mandatory: query_text, filters_json, pagination_strategy and positive result_limit bound each run. Do not broaden it. Until a portal has a verified definition it is configuration_required, not supported by guesswork.
 
+When `search_plan.steps` is nonempty, follow `search-steps.md`: each ordered step's query, mode and filters replace the legacy query/filter fields for that step. The shared source limit and original pagination bounds still apply. Do not execute the compatibility query as an additional search.
+
 Apply saved `review_guidance` when selecting and evaluating results inside that range. It may include paid takeover, maintenance and modernization alongside ordinary offers. It does not change the actual search query, supported filters or limit; do not paste review guidance into a portal search field. Requests pin a definition version, so never replace it with a newer active version during resumed work.
 
 For an unfamiliar assigned portal: inspect the visible search controls and accessible labels, apply the configured values, then verify the results heading and active filters. Read visible next-page controls. Open detail links only when they are job/project details; no application, account, messaging or payment navigation. A missing expected search control or unsupported saved filter is a partial/error result explaining the changed interface.

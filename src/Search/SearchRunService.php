@@ -13,6 +13,7 @@ final class SearchRunService
     public function __construct(
         private readonly Connection $database,
         private readonly AuditLogger $auditLogger,
+        private readonly SearchStepService $steps,
     ) {
     }
 
@@ -65,6 +66,7 @@ final class SearchRunService
             if ($runSource['source_status'] !== 'running' || $runSource['started_at'] === null) {
                 throw new \InvalidArgumentException('Dokončit lze pouze skutečně zahájený zdroj.');
             }
+            if ($result->status === 'complete') { $this->steps->assertFinished((int) $runSource['id'], $result->displayedCount); }
             $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
             $this->database->query('UPDATE search_run_sources SET', [
                 'source_status' => $result->status,
@@ -117,10 +119,11 @@ final class SearchRunService
     private function authorizedRequest(int $requestId, string $leaseToken): Row
     {
         $request = $this->database->fetch(
-            'SELECT runner_device_id, lease_token_hash, lease_expires_at FROM search_requests WHERE id = ? FOR UPDATE',
+            'SELECT runner_device_id, lease_token_hash, lease_expires_at, prepare_access, access_confirmed_at FROM search_requests WHERE id = ? FOR UPDATE',
             $requestId,
         );
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        if ($request !== null && (bool) $request['prepare_access'] && $request['access_confirmed_at'] === null) { throw new \InvalidArgumentException('Příprava přístupu čeká na potvrzení uživatele.'); }
         if (!$request instanceof Row
             || $request['lease_token_hash'] === null
             || !hash_equals((string) $request['lease_token_hash'], hash('sha256', $leaseToken))

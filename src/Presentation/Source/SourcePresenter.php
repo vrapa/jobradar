@@ -25,6 +25,7 @@ final class SourcePresenter extends SecuredPresenter
         $this->template->setParameters([
             'sources' => $sources,
             'manualSources' => $this->settings->manualSources(),
+            'sourcePurposes' => array_column(array_map(fn ($s): array => ['id' => $s->id, 'tags' => json_decode((string) ($this->settings->get($s->id)['purpose_tags_json'] ?? '[]'), true)], $sources), 'tags', 'id'),
             'definitions' => array_column(array_map(fn ($s): array => ['id' => $s->id, 'items' => $this->settings->definitions($s->id)], $sources), 'items', 'id'),
             'recentRequests' => $this->queries->recentRequests((int) $this->getUser()->getId()),
         ]);

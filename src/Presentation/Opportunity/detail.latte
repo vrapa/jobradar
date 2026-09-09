@@ -1,6 +1,17 @@
 {block title}{$opportunity->title}{/block}
 
 {block content}
+<details class="card p-3 mb-3" n:attr="open: $presenter['counterpartyForm']->hasErrors()">
+    <summary>Protistrana: {App\Opportunity\CounterpartyInput::LABELS[$opportunity->counterpartyHistory[0]['value'] ?? ''] ?? 'neověřeno'}</summary>
+    {form counterpartyForm}
+    <div n:if="$form->hasErrors()" class="alert alert-danger mt-3" role="alert"><ul><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+    <div class="my-3">{label counterpartyValue /}{input counterpartyValue, class: 'form-select'}</div>
+    <div class="mb-3">{label counterpartyReason /}{input counterpartyReason, class: 'form-control'}</div>
+    <div class="mb-3">{label counterpartyConfidence /}{input counterpartyConfidence, class: 'form-control'}</div>
+    <button n:name="send" class="btn btn-primary mb-3">Uložit protistranu</button>
+    {/form}
+    <ul><li n:foreach="$opportunity->counterpartyHistory as $c">{App\Opportunity\CounterpartyInput::LABELS[$c['value'] ?? ''] ?? 'neověřeno'} · {$c['reason']} · jistota {$c['confidence'] ?? 'neověřeno'} · ověřeno {$c['verified_at'] ?? 'neověřeno'} · verze nabídky #{$c['source_version_id']}</li></ul>
+</details>
 <details class="card p-3 mb-3" n:attr="open: $presenter['projectCareForm']->hasErrors()">
     <summary>Převzetí / péče o existující aplikaci: {if count($opportunity->projectCareHistory) === 0 || $opportunity->projectCareHistory[0]['value'] === null}neověřeno{else}{$opportunity->projectCareHistory[0]['value'] ? 'ano' : 'ne'}{/if}</summary>
     {form projectCareForm}

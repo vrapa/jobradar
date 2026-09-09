@@ -30,6 +30,7 @@ final readonly class OpportunitySummary
         public ?int $coveragePercent,
         public ?string $recommendation,
         public ?bool $projectCare = null,
+        public ?string $counterparty = null,
     ) {
     }
 }

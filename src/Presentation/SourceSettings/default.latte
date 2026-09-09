@@ -5,6 +5,7 @@
 {form settingsForm}
     <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
     <div class="mb-3"><label n:name="priority" class="form-label">Priorita</label><select n:name="priority" class="form-select"></select></div>
+    <fieldset class="mb-3"><legend class="h6">Zaměření zdroje</legend>{foreach $form[tags]->items as $key => $label}<label class="form-check"><input n:name="tags:$key" class="form-check-input"><span class="form-check-label">{$label}</span></label>{/foreach}</fieldset>
     {if $source['source_type'] === 'manual_search'}
     <div class="mb-3"><label n:name="name" class="form-label">Název dotazu</label><input n:name="name" class="form-control"><div class="form-text">Prázdný název změní pouze prioritu zdroje. Stejný název vytvoří novou verzi dotazu.</div></div>
     <div class="mb-3"><label n:name="query" class="form-label">Vyhledávací dotaz</label><textarea n:name="query" class="form-control" rows="3"></textarea></div>
@@ -13,6 +14,18 @@
     <button n:name="send" class="btn btn-primary">Uložit</button>
 {/form}
 </div>
+{if !in_array($source['source_type'], ['manual', 'manual_search'], true)}
+<section class="card p-3 mb-3"><h2 class="h5">Verzované zadání kontroly</h2>
+<p>Pořadí v poli určuje průchod. Každý krok obsahuje key (jedinečný klíč), name, query, filters (objekt) a limit. Volitelné mode je keywords (klíčová slova), category (průchod kategorií) nebo skill (filtr dovednosti). Společný limit platí pro všechny kroky dohromady; duplicity ve výpisech také spotřebují rozsah průchodu.</p>
+{form planForm}
+<div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+<div class="mb-3"><label n:name="steps" class="form-label">Kroky hledání (JSON)</label><textarea n:name="steps" class="form-control font-monospace" rows="14" spellcheck="false"></textarea></div>
+<div class="mb-3"><label n:name="limit" class="form-label">Společný limit výsledků</label><input n:name="limit" class="form-control"></div>
+<div class="mb-3"><label n:name="guidance" class="form-label">Pokyny k posouzení</label><textarea n:name="guidance" class="form-control" rows="4"></textarea></div>
+<div class="mb-3"><label n:name="verification" class="form-label">Jak a kdy byla ověřena podpora dotazů a filtrů?</label><textarea n:name="verification" class="form-control" rows="3"></textarea></div>
+<button n:name="send" class="btn btn-primary">Uložit novou verzi zadání</button>
+{/form}</section>
+{/if}
 {if $source['source_type'] === 'manual_search'}
 <h2 class="h5">Uložené dotazy</h2>
 <p>Stejný název uloží novou verzi dotazu. Vypnutím „Dotaz aktivní“ jej deaktivujete.</p>

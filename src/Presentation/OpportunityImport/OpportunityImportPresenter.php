@@ -31,6 +31,7 @@ final class OpportunityImportPresenter extends SecuredPresenter
         $form = new Form();
         $form->addHidden('discoveryDefinitionId', (string) ($this->getParameter('discovery') ?? ''));
         \App\Opportunity\ProjectCareForm::add($form);
+        \App\Opportunity\CounterpartyForm::add($form);
         $form->addText('url', 'URL nabídky')
             ->setHtmlType('url')
             ->addRule(Form::MaxLength, 'URL smí mít nejvýše %d znaků.', 2048)
@@ -79,6 +80,7 @@ final class OpportunityImportPresenter extends SecuredPresenter
                 sourceLanguage: $this->nullable($values['sourceLanguage'] ?? null),
                 incomplete: (bool) ($values['incomplete'] ?? false),
                 projectCare: ($values['projectCareValue'] ?? '') === '' ? null : \App\Opportunity\ProjectCareForm::read($values),
+                counterparty: ($values['counterpartyValue'] ?? '') === '' ? null : \App\Opportunity\CounterpartyForm::read($values),
                 discoveryDefinitionId: ($values['discoveryDefinitionId'] ?? '') === '' ? null : (int) $values['discoveryDefinitionId'],
             ), (int) $this->getUser()->getId());
         } catch (\InvalidArgumentException $exception) {

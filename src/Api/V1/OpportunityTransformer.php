@@ -26,6 +26,7 @@ final class OpportunityTransformer
             'decision' => $opportunity->decision->value,
             'workflow_status' => $opportunity->workflowStatus,
             'project_care' => $opportunity->projectCare,
+            'counterparty' => $opportunity->counterparty,
             'rate' => [
                 'min' => $opportunity->rateMin,
                 'max' => $opportunity->rateMax,
@@ -66,6 +67,8 @@ final class OpportunityTransformer
             'decision' => $opportunity->decisionState->decision->value,
             'workflow_status' => $opportunity->decisionState->workflowStatus,
             'project_care_history' => $opportunity->projectCareHistory,
+            'counterparty' => $opportunity->counterpartyHistory[0]['value'] ?? null,
+            'counterparty_history' => $opportunity->counterpartyHistory,
             'project_care' => $opportunity->projectCareHistory[0]['value'] ?? null,
             'discoveries' => $opportunity->discoveries,
             'rate' => [

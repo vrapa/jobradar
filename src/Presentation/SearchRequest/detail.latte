@@ -55,6 +55,12 @@
 </section>
 
 <section aria-labelledby="sources-title">
+<section n:if="count($searchPlans) > 0" class="card p-3 mb-3"><h2 class="h5">Připnutá zadání a průchod kroků</h2>
+<article n:foreach="$searchPlans as $plan" class="mb-3"><h3 class="h6">{$plan['name']} · verze {$plan['version']} · společný limit {$plan['limit']}</h3>
+<ol><li n:foreach="$plan['steps'] as $step"><strong>{$step['name']}</strong> · {$step['query']} · limit {$step['limit']}<br>
+{if $step['status'] === 'planned'}Nezahájeno{elseif $step['status'] === 'running'}Rozpracováno{elseif $step['status'] === 'skipped_limit'}Neprocházeno – společný limit vyčerpán{else}Dokončen rozsah kroku{/if}
+{if !in_array($step['status'], ['planned','skipped_limit'], true)} · zobrazeno {$step['displayed_count']}{/if}
+<p n:if="$step['checkpoint'] !== null" class="small">{$step['checkpoint']['completed_unit']}</p></li></ol></article></section>
     <h2 id="sources-title" class="h4 mb-3">Plánované zdroje</h2>
     <div class="vstack gap-3">
         <article n:foreach="$request->sources as $source" class="card shadow-sm {if $source->loginRequired}border-warning{/if}">

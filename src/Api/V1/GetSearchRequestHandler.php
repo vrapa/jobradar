@@ -18,6 +18,7 @@ final class GetSearchRequestHandler extends BaseHandler
         private readonly ApiRequestContext $requestContext,
         private readonly SourceQueryService $queries,
         private readonly SearchRequestTransformer $transformer,
+        private readonly \App\Search\SearchStepService $steps,
     ) {
         parent::__construct();
     }
@@ -48,6 +49,6 @@ final class GetSearchRequestHandler extends BaseHandler
         if ($request === null) {
             return new JsonApiResponse(404, ['error' => ['code' => 'search_request_not_found', 'message' => 'Kontrola nebyla nalezena.']]);
         }
-        return new JsonApiResponse(200, ['data' => $this->transformer->transform($request)]);
+        return new JsonApiResponse(200, ['data' => [...$this->transformer->transform($request), 'search_plans' => $this->steps->requestPlans($this->requestContext->identity()->ownerUserId, $id)]]);
     }
 }
