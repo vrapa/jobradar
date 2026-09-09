@@ -215,9 +215,20 @@ final class SourcePreferencesTest extends TestCase
         });
     }
 
-    public function testAccessPreparationRequiresOwnerConfirmationAndResumesSameRun(): void
+    /** @return iterable<string, array{string, string}> */
+    public static function accessResults(): iterable
     {
-        $this->withinTransaction(function (): void {
+        foreach (['available', 'login_required', 'blocked', 'error'] as $access) {
+            foreach (['partial', 'cancelled'] as $finish) {
+                yield $access . '-' . $finish => [$access, $finish];
+            }
+        }
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('accessResults')]
+    public function testAccessPreparationRequiresOwnerConfirmationAndResumesSameRun(string $access, string $finish): void
+    {
+        $this->withinTransaction(function () use ($access, $finish): void {
         $unique = bin2hex(random_bytes(8));
         $now = new \DateTimeImmutable();
         $this->db->query('INSERT INTO api_clients', ['public_identifier' => $unique, 'name' => 'Preparation test', 'client_type' => 'runner', 'created_by_user_id' => $this->user, 'created_at' => $now]);
@@ -235,10 +246,19 @@ final class SourcePreferencesTest extends TestCase
         self::assertTrue($execution->execute($identity, [...$base, 'operation' => 'task'])['prepare_access']);
         $this->rejects(fn () => $execution->execute($identity, [...$base, 'operation' => 'prepare_access', 'idempotency_key' => 'rejected-secret-key', 'payload' => ['status' => 'available', 'cookie' => 'not-a-real-secret']]));
         $this->rejects(fn () => $execution->execute($identity, [...$base, 'operation' => 'start', 'idempotency_key' => 'rejected-start-key', 'payload' => ['description' => 'Should not start']]));
-        $prepare = [...$base, 'operation' => 'prepare_access', 'idempotency_key' => 'prepare-test-key-123', 'payload' => ['status' => 'login_required']];
+        $prepare = [...$base, 'operation' => 'prepare_access', 'idempotency_key' => 'prepare-test-key-123', 'payload' => ['status' => $access]];
         $result = $execution->execute($identity, $prepare);
         self::assertSame('waiting_for_login', $result['request_status']);
+        $state = (array) $this->db->fetch('SELECT * FROM source_access_states WHERE source_id = ?', $this->source);
+        self::assertSame($access, $state['access_status']);
+        self::assertSame($access === 'login_required', (bool) $state['intervention_required']);
+        self::assertInstanceOf(\DateTimeInterface::class, $state['verified_at']);
+        self::assertStringStartsWith('runner:', $state['verification_origin']);
+        $views = array_values(array_filter($this->container->getByType(SourceQueryService::class)->activeCheckableSources(), fn ($s): bool => $s->id === $this->source));
+        self::assertSame($access, $views[0]->accessStatus);
+        self::assertNull($views[0]->lastSuccessAt);
         self::assertSame($result, $execution->execute($identity, $prepare));
+        self::assertEquals($state, (array) $this->db->fetch('SELECT * FROM source_access_states WHERE source_id = ?', $this->source));
         self::assertNull($this->db->fetchField('SELECT pages_traversed FROM search_run_sources WHERE search_run_id = ?', $lease['run_id']));
         self::assertSame('planned', $this->db->fetchField('SELECT source_status FROM search_run_sources WHERE search_run_id = ?', $lease['run_id']));
         $preparation = $this->container->getByType(\App\Search\AccessPreparationService::class);
@@ -249,6 +269,10 @@ final class SourcePreferencesTest extends TestCase
         self::assertIsArray($next);
         self::assertSame($lease['run_id'], $next['run_id']);
         self::assertFalse($execution->execute($identity, ['operation' => 'task', 'run_id' => $next['run_id'], 'lease_token' => $next['lease_token']])['prepare_access']);
+        $continued = [...$base, 'lease_token' => $next['lease_token']];
+        $execution->execute($identity, [...$continued, 'operation' => 'start', 'idempotency_key' => 'access-start-test-123', 'payload' => ['description' => 'Synthetic access regression']]);
+        $execution->execute($identity, [...$continued, 'operation' => 'finish', 'idempotency_key' => 'access-finish-test-123', 'payload' => ['status' => $finish, 'incomplete_reason' => 'Synthetic interruption']]);
+        self::assertEquals($state, (array) $this->db->fetch('SELECT * FROM source_access_states WHERE source_id = ?', $this->source));
         });
     }
 }

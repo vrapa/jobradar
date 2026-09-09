@@ -110,7 +110,16 @@ final class ExecutionService
             if ($operation === 'prepare_access') {
                 $access = $payload['status'] ?? null;
                 if (array_diff(array_keys($payload), ['status']) !== [] || !in_array($access, ['available','login_required','blocked','error'], true)) { throw new \InvalidArgumentException('Neplatný výsledek přípravy.'); }
-                $this->database->query('INSERT INTO search_access_preparations', ['search_request_id' => $run['search_request_id'], 'source_id' => $source['source_id'], 'access_status' => $access, 'observed_at' => new \DateTimeImmutable()], 'ON DUPLICATE KEY UPDATE access_status = VALUES(access_status), observed_at = VALUES(observed_at)');
+                $observedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+                $this->database->query('INSERT INTO search_access_preparations', ['search_request_id' => $run['search_request_id'], 'source_id' => $source['source_id'], 'access_status' => $access, 'observed_at' => $observedAt], 'ON DUPLICATE KEY UPDATE access_status = VALUES(access_status), observed_at = VALUES(observed_at)');
+                $this->database->query('INSERT INTO source_access_states', [
+                    'source_id' => $source['source_id'],
+                    'access_status' => $access,
+                    'verified_at' => $observedAt,
+                    'verification_origin' => 'runner:' . $device,
+                    'intervention_required' => $access === 'login_required',
+                    'updated_at' => $observedAt,
+                ], 'ON DUPLICATE KEY UPDATE access_status = VALUES(access_status), verified_at = VALUES(verified_at), verification_origin = VALUES(verification_origin), intervention_required = VALUES(intervention_required), updated_at = VALUES(updated_at)');
                 $remaining = $this->database->fetchField('SELECT COUNT(*) FROM search_request_sources rs LEFT JOIN search_access_preparations p ON p.search_request_id = rs.search_request_id AND p.source_id = rs.source_id WHERE rs.search_request_id = ? AND p.source_id IS NULL', $run['search_request_id']);
                 if ((int) $remaining === 0) {
                     $this->database->query("UPDATE search_requests SET request_status = 'waiting_for_login', lease_token_hash = NULL, lease_expires_at = NULL WHERE id = ?", $run['search_request_id']);

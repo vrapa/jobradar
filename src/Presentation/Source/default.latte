@@ -42,12 +42,14 @@
 
         <section class="mt-4" aria-labelledby="source-list-title">
             <h2 id="source-list-title" class="h5">Aktivní zdroje</h2>
+            <p class="small text-body-secondary">Stav přístupu vychází z posledního ověření, nikoli z úplnosti kontroly nabídek. „Přístup neověřen“ sám o sobě nevyžaduje přihlášení.</p>
             <div class="vstack gap-2">
                 <article n:foreach="$sources as $source" class="card shadow-sm"><div class="card-body">
                     <div class="d-flex justify-content-between gap-3">
                         <div><h3 class="h6 mb-1">{$source->name}</h3><div class="small text-body-secondary">Priorita {$source->priority}{if $source->marketCode !== null} · {$source->marketCode}{/if}</div></div>
-                        <span class="badge {$source->accessStatus === 'available' ? 'text-bg-success' : ($source->interventionRequired ? 'text-bg-warning' : 'text-bg-light border')}">{$source->accessStatus === 'unknown' ? 'Přístup neověřen' : $source->accessStatus}</span>
+                        <span class="badge {$source->accessStatus === 'available' ? 'text-bg-success' : (in_array($source->accessStatus, ['login_required', 'blocked', 'error']) ? 'text-bg-warning' : 'text-bg-light border')}">{if $source->accessStatus === 'available'}Přístup dostupný{elseif $source->accessStatus === 'login_required'}Vyžaduje přihlášení{elseif $source->accessStatus === 'blocked'}Přístup blokován{elseif $source->accessStatus === 'error'}Chyba při ověřování{else}Přístup neověřen{/if}</span>
                     </div>
+                    <div n:if="$source->accessVerifiedAt !== null" class="small text-body-secondary mt-1">Poslední ověření přístupu: {$source->accessVerifiedAt|date:'j. n. Y H:i'}</div>
                     <a href="{$source->url}" rel="noopener noreferrer" target="_blank" class="small">Otevřít zdroj</a>
                     <a n:if="$user->isInRole('admin')" n:href="SourceSettings:default $source->id" class="small ms-2">Upravit zdroj a zadání</a>
                     <span n:foreach="$sourcePurposes[$source->id] as $tag" class="badge text-bg-light border ms-1">{App\Search\SearchPlan::TAGS[$tag] ?? $tag}</span>

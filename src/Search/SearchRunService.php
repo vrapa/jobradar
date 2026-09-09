@@ -152,6 +152,10 @@ final class SearchRunService
 
     private function updateAccessState(int $sourceId, int $runnerDeviceId, SourceRunResult $result, \DateTimeImmutable $now): void
     {
+        // Incomplete coverage alone provides no new evidence about access.
+        if (in_array($result->status, ['partial', 'cancelled'], true)) {
+            return;
+        }
         $status = match ($result->status) {
             'complete' => 'available',
             'waiting_for_login' => 'login_required',
