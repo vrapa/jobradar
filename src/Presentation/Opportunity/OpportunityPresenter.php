@@ -23,6 +23,7 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly OpportunityDecisionService $decisions,
         private readonly AssessmentQueryService $assessments,
         private readonly DecisionQueryService $decisionQueries,
+        private readonly \App\Opportunity\ProjectCareService $projectCare,
     ) {
         parent::__construct();
     }
@@ -50,6 +51,31 @@ final class OpportunityPresenter extends SecuredPresenter
         }
     }
 
+    protected function createComponentProjectCareForm(): Form
+    {
+        $opportunity = $this->opportunities->getDetail($this->opportunityId, (int) $this->getUser()->getId());
+        if ($opportunity === null) { $this->error('Nabídka nenalezena.'); }
+        $form = new Form();
+        $form->addHidden('lockVersion', (string) $opportunity->lockVersion);
+        \App\Opportunity\ProjectCareForm::add($form);
+        $latest = $opportunity->projectCareHistory[0] ?? null;
+        $form->onAnchor[] = static function (Form $form) use ($latest): void {
+            if (!$form->isSubmitted() && $latest !== null) {
+                $form->setDefaults(['projectCareValue' => $latest['value'] === null ? '' : ($latest['value'] ? 'yes' : 'no'), 'projectCareReason' => $latest['reason'], 'projectCareConfidence' => $latest['confidence']]);
+            }
+        };
+        $form->addProtection();
+        $form->addSubmit('send', 'Uložit klasifikaci');
+        $form->onSuccess[] = function (Form $form): void {
+            $v = (array) $form->getValues();
+            try { $this->projectCare->save($this->opportunityId, (int) $v['lockVersion'], \App\Opportunity\ProjectCareForm::read($v), (int) $this->getUser()->getId()); }
+            catch (\InvalidArgumentException|OpportunityConflictException $e) { $form->addError($e->getMessage()); return; }
+            $this->flashMessage('Klasifikace uložena do historie.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
     protected function createComponentDecisionForm(): Form
     {
         $form = new Form();
@@ -71,8 +97,8 @@ final class OpportunityPresenter extends SecuredPresenter
         $form->addSubmit('react', 'Reagovat');
         $form->addSubmit('uninteresting', 'Nezajímavé');
         $form->addSubmit('undo', 'Zpět na nerozhodnuto');
-        $form->onSuccess[] = function (Form $form, array|object $values): void {
-            $this->decisionFormSucceeded($form, (array) $values);
+        $form->onSuccess[] = function (Form $form): void {
+            $this->decisionFormSucceeded($form, (array) $form->getValues());
         };
         return $form;
     }

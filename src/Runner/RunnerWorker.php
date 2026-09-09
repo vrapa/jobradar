@@ -72,9 +72,9 @@ final class RunnerWorker
             $processed++;
             if ($result->status === 'waiting_for_login') {
                 $status = 'waiting_for_login';
-                break;
+                continue;
             }
-            if ($result->status !== 'complete') {
+            if ($result->status !== 'complete' && $status !== 'waiting_for_login') {
                 $status = 'partial';
             }
         }

@@ -11,6 +11,10 @@ abstract class BasePresenter extends Presenter
     protected function startup(): void
     {
         parent::startup();
+        $template = $this->getTemplate();
+        if ($template instanceof \Nette\Bridges\ApplicationLatte\DefaultTemplate) {
+            $template->setParameters(['assetVersion' => (string) filemtime(dirname(__DIR__, 2) . '/public/assets/app.js')]);
+        }
         $response = $this->getHttpResponse();
         $response->setHeader('X-Content-Type-Options', 'nosniff');
         $response->setHeader('Referrer-Policy', 'no-referrer');

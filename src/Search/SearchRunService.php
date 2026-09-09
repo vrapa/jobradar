@@ -173,12 +173,19 @@ final class SearchRunService
 
     private function advanceRequest(int $requestId, int $runId, \DateTimeImmutable $now): void
     {
+        $remaining = (int) $this->database->fetchField(
+            "SELECT COUNT(*) FROM search_run_sources WHERE search_run_id = ? AND source_status IN ('planned', 'running')", $runId,
+        );
+        if ($remaining > 0) {
+            $this->database->query('UPDATE search_requests SET request_status = ? WHERE id = ?', 'running', $requestId);
+            return;
+        }
         $waitingForLogin = (int) $this->database->fetchField(
             "SELECT COUNT(*) FROM search_run_sources WHERE search_run_id = ? AND source_status = 'waiting_for_login'",
             $runId,
         );
         if ($waitingForLogin > 0) {
-            $this->database->query('UPDATE search_requests SET request_status = ? WHERE id = ?', 'waiting_for_login', $requestId);
+            $this->database->query('UPDATE search_requests SET request_status = ?, lease_token_hash = NULL, lease_expires_at = NULL WHERE id = ?', 'waiting_for_login', $requestId);
             return;
         }
         $open = (int) $this->database->fetchField(

@@ -43,6 +43,8 @@ final class ImportOpportunityHandler extends BaseHandler
                 'summary' => ['type' => ['string', 'null'], 'maxLength' => 65535],
                 'sourceLanguage' => ['type' => ['string', 'null'], 'maxLength' => 16],
                 'incomplete' => ['type' => 'boolean'],
+                'projectCare' => \App\Opportunity\ProjectCareInput::schema(),
+                'discoveryDefinitionId' => ['type' => ['integer','null'], 'minimum' => 1],
             ],
         ], JSON_THROW_ON_ERROR)))->setRequired()];
     }

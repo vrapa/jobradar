@@ -14,6 +14,9 @@ final readonly class SearchCoverageSummary
         public int $loginRequiredCount,
         public int $errorCount,
         public \DateTimeInterface $requestedAt,
+        public int $partialCount = 0,
+        public int $pendingCount = 0,
+        public int $unverifiedCount = 0,
     ) {
     }
 }

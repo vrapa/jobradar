@@ -1,6 +1,17 @@
 {block title}Kontrola #{$request->id}{/block}
 
 {block content}
+<section n:if="$preparation['prepare_access'] && $preparation['access_confirmed_at'] === null" class="card p-3 mb-3">
+    <h2 class="h5">Příprava přihlášení v Chrome – Práce</h2>
+    <p>Codex otevře vybrané zdroje a připraví přihlašovací stránky. Přihlaste se v Chrome a poté potvrďte pokračování. Nabídky zatím nejsou prověřené.</p>
+    <ul><li n:foreach="$preparation['sources'] as $s"><a href="{$s['url']}" target="_blank" rel="noopener noreferrer">{$s['name']}</a> · {if $s['access_status'] === 'available'}přístup dostupný{elseif $s['access_status'] === 'login_required'}přihlaste se{elseif $s['access_status'] === 'blocked'}přístup blokován{elseif $s['access_status'] === 'error'}příprava se nezdařila{else}čeká na otevření{/if}</li></ul>
+    {if $preparation['request_status'] === 'waiting_for_login'}
+    {form accessForm}
+        <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+        <button n:name="confirm" class="btn btn-primary">Přihlášení mám připravené – pokračovat v kontrole</button>
+    {/form}
+    {/if}
+</section>
 <nav aria-label="Drobečková navigace" class="mb-3">
     <a n:href="Source:" class="text-decoration-none">Zdroje a kontroly</a>
     <span class="text-body-secondary mx-2" aria-hidden="true">/</span>
@@ -9,11 +20,11 @@
 
 <header class="mb-4">
     <div class="d-flex flex-wrap gap-2 mb-2">
-        <span class="badge text-bg-light border">{$request->status}</span>
+        <span class="badge text-bg-light border">{App\Search\CheckStatus::label($request->status)}</span>
         <span class="badge text-bg-primary">{$request->checkedSourceCount()} z {count($request->sources)} úplně zkontrolováno</span>
     </div>
     <h1 class="display-6 fw-bold">Kontrola #{$request->id}</h1>
-    <p class="lead text-body-secondary">Plánovaný zdroj není považován za zkontrolovaný, dokud runner neuloží skutečný úplný průchod a jeho počty.</p>
+    <p class="lead text-body-secondary">Plánovaný zdroj není považován za zkontrolovaný, dokud Codex neuloží skutečný úplný průchod a jeho počty.</p>
 </header>
 
 <section n:if="$request->canResume() || $request->canCancel()" class="card shadow-sm mb-4 border-warning-subtle" aria-labelledby="control-title">
@@ -23,7 +34,7 @@
         {form controlForm}
             <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
             <div class="d-flex flex-wrap gap-2">
-                <button n:if="$request->canResume()" n:name="resume" class="btn btn-warning">Ověřit přihlášení a pokračovat</button>
+                <button n:if="$request->canResume() && (!$preparation['prepare_access'] || $preparation['access_confirmed_at'] !== null)" n:name="resume" class="btn btn-warning">Ověřit přihlášení a pokračovat</button>
                 <button n:if="$request->canCancel()" n:name="cancel" class="btn btn-outline-danger">Zrušit kontrolu</button>
             </div>
         {/form}
@@ -37,7 +48,7 @@
             <div class="col-6 col-lg-3"><div class="small text-body-secondary">Vyžádáno</div><div>{$request->requestedAt|date:'j. n. Y H:i'}</div></div>
             <div class="col-6 col-lg-3"><div class="small text-body-secondary">Zahájeno</div><div>{$request->startedAt !== null ? ($request->startedAt|date:'j. n. Y H:i') : 'Dosud ne'}</div></div>
             <div class="col-6 col-lg-3"><div class="small text-body-secondary">Dokončeno</div><div>{$request->finishedAt !== null ? ($request->finishedAt|date:'j. n. Y H:i') : 'Dosud ne'}</div></div>
-            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Runner</div><div>{$request->runnerName ?? 'Dosud nepřiřazen'}</div></div>
+            <div class="col-6 col-lg-3"><div class="small text-body-secondary">Vykonavatel</div><div>{$request->runnerName ?? 'Dosud nepřiřazen'}</div></div>
         </div>
         <p n:if="$request->completionReason !== null" class="alert alert-secondary mt-3 mb-0 preserve-lines">{$request->completionReason}</p>
     </div>
@@ -51,7 +62,7 @@
                 <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
                     <div><h3 class="h5 mb-1">{$source->sourceName}</h3><span class="small text-body-secondary">Priorita {$source->priority}</span></div>
                     <div class="d-flex gap-2 align-items-start">
-                        <span class="badge {$source->wasCheckedCompletely() ? 'text-bg-success' : ($source->loginRequired ? 'text-bg-warning' : 'text-bg-light border')}">{$source->status}</span>
+                        <span class="badge {$source->wasCheckedCompletely() ? 'text-bg-success' : ($source->loginRequired ? 'text-bg-warning' : 'text-bg-light border')}">{App\Search\CheckStatus::label($source->status)}</span>
                         <span n:if="!$source->wasStarted()" class="badge text-bg-secondary">Pouze plánováno</span>
                     </div>
                 </div>

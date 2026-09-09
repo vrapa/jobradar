@@ -18,10 +18,10 @@ final class RunnerLeaseService
     ) {
     }
 
-    public function claimNext(int $runnerDeviceId): ?RunnerLease
+    public function claimNext(int $runnerDeviceId, int $ownerUserId): ?RunnerLease
     {
         /** @var RunnerLease|null */
-        return $this->database->transaction(function () use ($runnerDeviceId): ?RunnerLease {
+        return $this->database->transaction(function () use ($runnerDeviceId, $ownerUserId): ?RunnerLease {
             $now = self::now();
             $device = $this->database->fetch(
                 'SELECT id, device_status FROM runner_devices WHERE id = ? AND revoked_at IS NULL FOR UPDATE',
@@ -30,11 +30,19 @@ final class RunnerLeaseService
             if (!$device instanceof Row || $device['device_status'] === 'revoked') {
                 throw new \InvalidArgumentException('Runner zařízení neexistuje nebo bylo odvoláno.');
             }
+            $this->touchDevice($runnerDeviceId, $now);
+            if ($this->database->fetchField(
+                "SELECT id FROM search_requests WHERE runner_device_id = ? AND lease_token_hash IS NOT NULL AND lease_expires_at > ? LIMIT 1",
+                $runnerDeviceId, $now,
+            ) !== null) {
+                return null;
+            }
             $request = $this->database->fetch(
-                "SELECT id, request_status FROM search_requests
-                 WHERE request_status IN ('waiting_for_runner', 'resume_requested')
-                    OR (request_status IN ('checking_access', 'running') AND lease_expires_at < ?)
+                "SELECT id, request_status, requested_by_user_id FROM search_requests
+                 WHERE requested_by_user_id = ? AND executor_eligible = 1 AND (request_status IN ('waiting_for_runner', 'resume_requested')
+                    OR (request_status IN ('checking_access', 'running') AND lease_expires_at < ?))
                  ORDER BY requested_at, id LIMIT 1 FOR UPDATE SKIP LOCKED",
+                $ownerUserId,
                 $now,
             );
             if (!$request instanceof Row) {
@@ -70,8 +78,8 @@ final class RunnerLeaseService
                 $this->database->query('INSERT INTO search_runs', [
                     'search_request_id' => $requestId,
                     'runner_device_id' => $runnerDeviceId,
-                    'candidate_profile_id' => null,
-                    'scoring_rule_set_id' => null,
+                    'candidate_profile_id' => $this->database->fetchField('SELECT id FROM candidate_profiles WHERE created_by_user_id = ? AND valid_from <= ? AND (valid_until IS NULL OR valid_until > ?) ORDER BY version DESC, id DESC LIMIT 1', $request['requested_by_user_id'], $now, $now),
+                    'scoring_rule_set_id' => $this->database->fetchField("SELECT id FROM scoring_rule_sets WHERE created_by_user_id = ? AND status IN ('active', 'draft') ORDER BY (status = 'active') DESC, version DESC, id DESC LIMIT 1", $request['requested_by_user_id']),
                     'run_status' => 'running',
                     'started_at' => $now,
                 ]);
@@ -88,9 +96,9 @@ final class RunnerLeaseService
             $sourceIds = array_map(
                 static fn (Row $row): int => (int) $row['source_id'],
                 $this->database->fetchAll(
-                    "SELECT source_id FROM search_run_sources
-                     WHERE search_run_id = ? AND source_status IN ('planned', 'waiting_for_login')
-                     ORDER BY source_id",
+                    "SELECT rs.source_id FROM search_run_sources rs JOIN sources s ON s.id = rs.source_id
+                     WHERE rs.search_run_id = ? AND rs.source_status IN ('planned', 'waiting_for_login') AND s.source_type NOT IN ('manual', 'manual_search')
+                     ORDER BY s.priority, s.name, s.id",
                     $runId,
                 ),
             );

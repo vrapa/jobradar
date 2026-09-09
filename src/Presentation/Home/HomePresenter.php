@@ -27,10 +27,16 @@ final class HomePresenter extends SecuredPresenter
     public function renderDefault(): void
     {
         $items = $this->opportunities->listCurrent((int) $this->getUser()->getId());
+        $care = (string) ($this->getParameter('care') ?? 'all');
+        if (!in_array($care, ['all','yes','no','unknown'], true)) { $care = 'all'; }
+        if ($care !== 'all') { $items = array_values(array_filter($items, static fn ($o): bool => $o->projectCare === match ($care) { 'yes' => true, 'no' => false, default => null })); }
         $this->template->setParameters([
             'opportunities' => $items,
             'opportunityCount' => count($items),
+            'care' => $care,
             'coverage' => $this->sourceQueries->latestCoverageSummary((int) $this->getUser()->getId()),
+            'unresolvedSources' => $this->sourceQueries->unresolvedSources((int) $this->getUser()->getId()),
+            'executor' => $this->sourceQueries->executorStatus((int) $this->getUser()->getId()),
         ]);
     }
 
@@ -81,8 +87,8 @@ final class HomePresenter extends SecuredPresenter
             $form->addSubmit('react', 'Reagovat');
             $form->addSubmit('uninteresting', 'Nezajímavé');
             $form->addSubmit('undo', 'Zpět');
-            $form->onSuccess[] = function (Form $form, array|object $values) use ($id): void {
-                $this->quickDecisionSucceeded($form, (array) $values, $id);
+            $form->onSuccess[] = function (Form $form) use ($id): void {
+                $this->quickDecisionSucceeded($form, (array) $form->getValues(), $id);
             };
             return $form;
         });

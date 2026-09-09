@@ -11,7 +11,7 @@ use Nette\Database\Row;
 
 final class OpportunityQueryService
 {
-    public function __construct(private readonly Connection $database)
+    public function __construct(private readonly Connection $database, private readonly ProjectCareService $projectCare)
     {
     }
 
@@ -38,6 +38,7 @@ final class OpportunityQueryService
     {
         $rows = $this->database->fetchAll(
             'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
+                    (SELECT pc.value FROM opportunity_project_care pc WHERE pc.opportunity_id = o.id ORDER BY pc.id DESC LIMIT 1) AS project_care,
                     v.original_title, v.translated_title, v.summary, v.incomplete,
                     terms.rate_min, terms.rate_max, terms.currency, terms.rate_unit,
                     terms.workload_min, terms.workload_max, terms.workload_unit,
@@ -92,6 +93,7 @@ final class OpportunityQueryService
                 scoreMax: self::nullableDecimal($row['score_max']),
                 coveragePercent: $row['coverage'] === null ? null : (int) round((float) $row['coverage'] * 100),
                 recommendation: self::nullableString($row['recommendation']),
+                projectCare: $row['project_care'] === null ? null : (bool) $row['project_care'],
             ),
             $rows,
         );
@@ -146,6 +148,8 @@ final class OpportunityQueryService
             lockVersion: (int) $row['lock_version'],
             terms: $terms,
             technologies: $technologies,
+            projectCareHistory: $this->projectCare->history($id),
+            discoveries: array_map(static function ($d): array { $v = (array) $d; $v['discovered_at'] = $v['discovered_at']->format(DATE_ATOM); return $v; }, $this->database->fetchAll('SELECT d.search_definition_id,d.discovered_at,s.name AS source_name,sd.query_text FROM opportunity_discoveries d JOIN source_search_definitions sd ON sd.id = d.search_definition_id JOIN sources s ON s.id = sd.source_id WHERE d.opportunity_id = ? ORDER BY d.id', $id)),
             decisionState: new DecisionStateView(
                 decision: OpportunityDecision::from((string) $row['user_decision']),
                 reason: self::nullableString($row['decision_reason']),

@@ -16,7 +16,10 @@ final readonly class OpportunityImport
         public ?string $summary = null,
         public ?string $sourceLanguage = null,
         public bool $incomplete = false,
+        public ?ProjectCareInput $projectCare = null,
+        public ?int $discoveryDefinitionId = null,
     ) {
+        if ($discoveryDefinitionId !== null && $discoveryDefinitionId < 1) { throw new \InvalidArgumentException('Neplatná definice nalezení.'); }
         if (trim($this->originalTitle) === '') {
             throw new \InvalidArgumentException('Původní titulek je povinný.');
         }

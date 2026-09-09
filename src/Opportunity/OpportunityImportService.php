@@ -16,17 +16,25 @@ final class OpportunityImportService
         private readonly Connection $database,
         private readonly UrlNormalizer $urlNormalizer,
         private readonly AuditLogger $auditLogger,
+        private readonly ProjectCareService $projectCare,
     ) {
     }
 
-    public function import(OpportunityImport $import, ?int $actorUserId = null): OpportunityImportResult
+    public function import(OpportunityImport $import, ?int $actorUserId = null, ?int $sourceId = null): OpportunityImportResult
     {
         /** @var OpportunityImportResult */
-        return $this->database->transaction(function () use ($import, $actorUserId): OpportunityImportResult {
+        return $this->database->transaction(function () use ($import, $actorUserId, $sourceId): OpportunityImportResult {
             $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
             $normalizedUrl = $this->urlNormalizer->normalize($import->url);
             $urlHash = hash('sha256', $normalizedUrl);
-            $source = $this->database->fetch('SELECT id FROM sources WHERE name = ?', self::MANUAL_SOURCE_NAME);
+            $source = $sourceId === null
+                ? $this->database->fetch('SELECT id FROM sources WHERE name = ?', self::MANUAL_SOURCE_NAME)
+                : $this->database->fetch('SELECT id FROM sources WHERE id = ? AND active = 1 AND archived_at IS NULL', $sourceId);
+            if ($import->discoveryDefinitionId !== null) {
+                $discoverySource = $this->database->fetch("SELECT s.id FROM sources s JOIN source_search_definitions d ON d.source_id = s.id WHERE d.id = ? AND s.source_type = 'manual_search' AND s.active = 1 AND s.archived_at IS NULL", $import->discoveryDefinitionId);
+                if ($discoverySource === null || ($sourceId !== null && (int) $discoverySource['id'] !== $sourceId)) { throw new \InvalidArgumentException('Definice nalezení neodpovídá ručnímu zdroji.'); }
+                $source = $discoverySource;
+            }
             if (!$source instanceof Row) {
                 throw new \RuntimeException('Zdroj pro ruční import není inicializovaný. Spusťte databázové migrace.');
             }
@@ -82,7 +90,7 @@ final class OpportunityImportService
                     'translated_text' => $this->nullable($import->translatedText),
                     'summary' => $this->nullable($import->summary),
                     'translation_status' => $this->hasTranslation($import) ? 'completed' : 'not_requested',
-                    'translation_method' => $this->hasTranslation($import) ? 'manual' : null,
+                    'translation_method' => $this->hasTranslation($import) ? ($sourceId === null ? 'manual' : 'codex') : null,
                     'incomplete' => $import->incomplete,
                     'created_at' => $now,
                 ]);
@@ -96,11 +104,17 @@ final class OpportunityImportService
                 );
             } else {
                 $versionId = (int) $version['id'];
-                $this->completeExistingVersion($versionId, $import);
+                $this->completeExistingVersion($versionId, $import, $sourceId === null ? 'manual' : 'codex');
             }
 
             $result = new OpportunityImportResult($opportunityId, $versionId, $opportunityCreated, $versionCreated);
-            $this->auditLogger->record('opportunity.manual_imported', $actorUserId, [
+            if ($import->projectCare !== null) {
+                $this->projectCare->save($opportunityId, (int) $this->database->fetchField('SELECT lock_version FROM opportunities WHERE id = ?', $opportunityId), $import->projectCare, $actorUserId, $versionId);
+            }
+            if ($import->discoveryDefinitionId !== null) {
+                $this->database->query('INSERT IGNORE INTO opportunity_discoveries', ['opportunity_id' => $opportunityId, 'search_definition_id' => $import->discoveryDefinitionId, 'discovered_at' => $now]);
+            }
+            $this->auditLogger->record($sourceId === null ? 'opportunity.manual_imported' : 'opportunity.source_imported', $actorUserId, [
                 'opportunity_id' => $opportunityId,
                 'source_version_id' => $versionId,
                 'opportunity_created' => $opportunityCreated,
@@ -111,7 +125,7 @@ final class OpportunityImportService
         });
     }
 
-    private function completeExistingVersion(int $versionId, OpportunityImport $import): void
+    private function completeExistingVersion(int $versionId, OpportunityImport $import, string $translationMethod): void
     {
         $translatedTitle = $this->nullable($import->translatedTitle);
         $translatedText = $this->nullable($import->translatedText);
@@ -134,7 +148,7 @@ final class OpportunityImportService
             $hasTranslation,
             'completed',
             $hasTranslation,
-            'manual',
+            $translationMethod,
             $versionId,
         );
     }

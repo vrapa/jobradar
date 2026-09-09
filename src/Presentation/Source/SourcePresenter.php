@@ -14,6 +14,7 @@ final class SourcePresenter extends SecuredPresenter
     public function __construct(
         private readonly SourceQueryService $queries,
         private readonly SearchRequestService $requests,
+        private readonly \App\Search\SourceSettingsService $settings,
     ) {
         parent::__construct();
     }
@@ -23,6 +24,8 @@ final class SourcePresenter extends SecuredPresenter
         $sources = $this->queries->activeCheckableSources();
         $this->template->setParameters([
             'sources' => $sources,
+            'manualSources' => $this->settings->manualSources(),
+            'definitions' => array_column(array_map(fn ($s): array => ['id' => $s->id, 'items' => $this->settings->definitions($s->id)], $sources), 'items', 'id'),
             'recentRequests' => $this->queries->recentRequests((int) $this->getUser()->getId()),
         ]);
     }
@@ -37,12 +40,19 @@ final class SourcePresenter extends SecuredPresenter
         $form = new Form();
         $form->addCheckboxList('sources', 'Zdroje', $options)
             ->setRequired('Vyberte alespoň jeden zdroj.');
+        $selected = (int) ($this->getParameter('source') ?? 0);
+        $form->onAnchor[] = static function (Form $form) use ($options, $selected, $sources): void {
+            if (!$form->isSubmitted()) {
+                $form->setDefaults(['sources' => isset($options[$selected]) ? [$selected] : array_values(array_map(static fn ($s): int => $s->id, array_filter($sources, static fn ($s): bool => $s->priority === 'A')))]);
+            }
+        };
         $form->addHidden('idempotencyKey', bin2hex(random_bytes(20)));
+        $form->addCheckbox('prepareAccess', 'Nejprve připravit přihlášení v Chrome – Práce')->setDefaultValue(true);
         $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');
         $form->addSubmit('send', 'Spustit vybranou kontrolu')
             ->setDisabled($options === []);
-        $form->onSuccess[] = function (Form $form, array|object $values): void {
-            $this->searchRequestFormSucceeded($form, (array) $values);
+        $form->onSuccess[] = function (Form $form): void {
+            $this->searchRequestFormSucceeded($form, (array) $form->getValues());
         };
         return $form;
     }
@@ -60,6 +70,7 @@ final class SourcePresenter extends SecuredPresenter
                 (int) $this->getUser()->getId(),
                 array_values(array_map('intval', $selected)),
                 (string) ($values['idempotencyKey'] ?? ''),
+                (bool) ($values['prepareAccess'] ?? false),
             );
         } catch (\InvalidArgumentException $exception) {
             $form->addError($exception->getMessage());
@@ -67,10 +78,10 @@ final class SourcePresenter extends SecuredPresenter
         }
         $this->flashMessage(
             $result->created
-                ? sprintf('Kontrola #%d čeká na místní runner.', $result->requestId)
+                ? sprintf('Kontrola #%d byla zařazena. Čeká na Codex na vašem počítači.', $result->requestId)
                 : sprintf('Kontrola #%d už byla vytvořena.', $result->requestId),
             'success',
         );
-        $this->redirect('this');
+        $this->redirect('SearchRequest:detail', $result->requestId);
     }
 }

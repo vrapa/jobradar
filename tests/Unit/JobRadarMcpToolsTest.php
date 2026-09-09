@@ -12,6 +12,17 @@ use PHPUnit\Framework\TestCase;
 
 final class JobRadarMcpToolsTest extends TestCase
 {
+    public function testAccessPreparationIsOptionalAndForwardedToApi(): void
+    {
+        $http = new McpRecordingHttpClient([new RunnerHttpResponse(200, ['data' => []]), new RunnerHttpResponse(200, ['data' => []])]);
+        $tools = new JobRadarMcpTools(new JobRadarMcpApiClient('https://jobradar.example.test/api/v1', 'synthetic-token', $http));
+        $tools->requestSearch([3], 'legacy-request-key');
+        $tools->requestSearch([3], 'prepare-request-key', true);
+        self::assertFalse($http->bodies[0]['prepare_access'] ?? null);
+        self::assertTrue($http->bodies[1]['prepare_access'] ?? null);
+        self::assertSame('POST /api/v1/search-requests', $http->requests[1]);
+    }
+
     public function testReactionQueueAndDelegatedDecisionsUseVersionedApi(): void
     {
         $http = new McpRecordingHttpClient([

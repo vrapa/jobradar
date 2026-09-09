@@ -12,6 +12,12 @@
     </div>
 </header>
 
+<form method="get" class="d-flex gap-2 align-items-center mb-3">
+    <label for="care">Převzetí / péče o existující aplikaci</label>
+    <select id="care" name="care" class="form-select w-auto"><option value="all" selected={$care === 'all'}>Vše</option><option value="yes" selected={$care === 'yes'}>Ano</option><option value="no" selected={$care === 'no'}>Ne</option><option value="unknown" selected={$care === 'unknown'}>Neověřeno</option></select>
+    <button type="submit" class="btn btn-outline-primary">Filtrovat</button>
+</form>
+<div id="execution-status" data-execution-poll>
 <section class="card shadow-sm mb-4 {if $coverage !== null && ($coverage->loginRequiredCount > 0 || $coverage->errorCount > 0)}border-warning-subtle{/if}" aria-labelledby="coverage-title">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -20,15 +26,44 @@
                 <p n:if="$coverage === null" class="text-body-secondary mb-0">Zatím nebyla výslovně vyžádána žádná kontrola.</p>
                 <p n:if="$coverage !== null" class="mb-0">
                     <strong>{$coverage->completeCount} z {$coverage->plannedCount}</strong> zdrojů úplně zkontrolováno
-                    {if $coverage->loginRequiredCount > 0}, {$coverage->loginRequiredCount} vyžaduje přihlášení{/if}
-                    {if $coverage->errorCount > 0}, {$coverage->errorCount} skončilo chybou{/if}.
+                    {if $coverage->partialCount > 0}, {$coverage->partialCount} částečně{/if}
+                    {if $coverage->unverifiedCount > 0}, {$coverage->unverifiedCount} neprověřeno{/if}
+                    {if $coverage->pendingCount > 0}, {$coverage->pendingCount} čeká / probíhá{/if}.
+                    <span class="d-block small text-body-secondary">{App\Search\CheckStatus::label($coverage->status)}</span>
                 </p>
             </div>
             <a n:if="$coverage !== null" n:href="SearchRequest:detail $coverage->requestId" class="btn btn-outline-primary">Detail kontroly</a>
-            <a n:if="$coverage === null" n:href="Source:" class="btn btn-outline-primary">Spustit kontrolu</a>
+            <a n:href="Source:" class="btn btn-outline-primary">Spustit kontrolu</a>
+        </div>
+        <p class="small text-body-secondary mt-3 mb-0">Kontrolu zpracovává Codex na tomto počítači. Čekání ve frontě není prověřením zdroje.
+            {if $executor !== null && $executor['last_seen_at'] !== null}Poslední spojení: {$executor['last_seen_at']|date:'j. n. Y H:i:s'}.
+            {else}Vykonavatel se zatím nepřipojil.{/if}
+        </p>
+    </div>
+</section>
+<section n:if="count($unresolvedSources) > 0" class="mb-4" aria-labelledby="unverified-title">
+    <h2 id="unverified-title" class="h4">Neprověřené a částečně prověřené zdroje</h2>
+    <p class="text-body-secondary">Nálezy z jiných zdrojů zůstávají níže. Neúplná kontrola neznamená, že zde žádné nabídky nejsou.</p>
+    <div class="row g-3">
+        <div n:foreach="$unresolvedSources as $source" class="col-12 col-lg-6">
+            <article class="card h-100 border-warning-subtle"><div class="card-body">
+                <h3 class="h5"><a href="{$source['url']}" target="_blank" rel="noopener noreferrer">{$source['name']}</a></h3>
+                <p class="mb-2"><span class="badge text-bg-warning">{switch $source['source_status']}
+                    {case 'partial'}Částečně prověřeno{case 'waiting_for_login'}Vyžaduje přihlášení
+                    {case 'error'}Kontrola selhala{case 'running'}Kontrola probíhá
+                    {case 'cancelled'}Zrušeno{default}Čeká na kontrolu{/switch}</span></p>
+                <p>{$source['incomplete_reason'] ?? 'Zdroj dosud nemá dokončený průchod v této kontrole.'}</p>
+                <p n:if="$source['error_code'] !== null" class="small text-body-secondary">Kód příčiny: {$source['error_code']}</p>
+                <p class="small mb-1">Rozsah: {$source['query_text'] ?? 'Zatím nezaznamenán'}</p>
+                <p class="small mb-1">Stránek: {$source['pages_traversed'] ?? '?'} · zobrazených nabídek: {$source['displayed_count'] ?? '?'} · otevřených detailů: {$source['detail_opened_count'] ?? '?'}</p>
+                <p class="small text-body-secondary">Poslední pokus: {if $source['started_at'] !== null}{$source['started_at']|date:'j. n. Y H:i'}{else}ještě nezačal{/if}. Poslední úspěch: {if $source['last_success_at'] !== null}{$source['last_success_at']|date:'j. n. Y H:i'}{else}není doložen{/if}.</p>
+                <a n:href="SearchRequest:detail $source['request_id']" class="btn btn-sm btn-outline-primary">Detail / pokračovat</a>
+                <a n:if="in_array($source['source_status'], ['partial', 'error', 'cancelled'], true)" n:href="Source:default, source: $source['id']" class="btn btn-sm btn-outline-secondary">Vybrat pro nový pokus</a>
+            </div></article>
         </div>
     </div>
 </section>
+</div>
 
 <div class="d-flex gap-2 align-items-center mb-3">
     <span class="badge text-bg-primary rounded-pill">{$opportunityCount}</span>
@@ -50,6 +85,7 @@
                 <div class="d-flex gap-2 mb-2">
                     <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
                     <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplné</span>
+                    <span n:if="$opportunity->projectCare === true" class="badge text-bg-info">Převzetí / péče o aplikaci</span>
                     <span n:if="$opportunity->decision->value === 'react'" class="badge text-bg-success">K reakci</span>
                 </div>
                 <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id" class="stretched-link text-decoration-none">{$opportunity->title}</a></h2>

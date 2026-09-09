@@ -4,7 +4,7 @@
 <header class="mb-4">
     <p class="text-uppercase text-primary fw-semibold small mb-1">Výslovně spouštěné kontroly</p>
     <h1 class="display-6 fw-bold">Zdroje</h1>
-    <p class="lead text-body-secondary">Požadavek pouze čeká na místní runner. Zdroj se označí jako zkontrolovaný až po skutečném průchodu.</p>
+    <p class="lead text-body-secondary">Požadavek čeká na Codex na vašem počítači. Zdroj se označí jako zkontrolovaný až po skutečném průchodu.</p>
 </header>
 
 <div class="row g-4">
@@ -15,16 +15,25 @@
                 {if count($sources) === 0}
                     <div class="alert alert-info mb-0">Zatím není nakonfigurovaný žádný aktivní zdroj podporující kontrolu. Interní zdroj ručního importu se zde záměrně nenabízí.</div>
                 {else}
-                    {form searchRequestForm}
+                    {form searchRequestForm, data-search-request: 'true'}
                         <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
                         <fieldset>
                             <legend class="h6">Vyberte zdroje</legend>
+                            <div class="d-flex flex-wrap gap-2 mb-2" data-source-actions hidden>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-source-select="A">Jen A</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-source-select="B">Přidat B</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-source-select="C">Přidat C</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-source-select="all">Vše</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-source-select="none">Nic</button>
+                            </div>
+                            <p data-source-count aria-live="polite"></p>
                             <div class="vstack gap-2 mb-3">
                                 <label n:foreach="$form[sources]->items as $key => $label" class="form-check card p-3">
-                                    <input n:name="sources:$key" class="form-check-input"> <span class="form-check-label">{$label}</span>
+                                    <input n:name="sources:$key" class="form-check-input" data-priority="{foreach $sources as $s}{if $s->id === $key}{$s->priority}{/if}{/foreach}"> <span class="form-check-label">{$label}</span>
                                 </label>
                             </div>
                         </fieldset>
+                        <div class="form-check mb-3"><input n:name="prepareAccess" class="form-check-input"><label n:name="prepareAccess" class="form-check-label">Nejprve připravit přihlášení v Chrome – Práce</label><p class="small text-body-secondary">Codex otevře vybrané zdroje. Po vašem potvrzení na detailu požadavku začne kontrola nabídek.</p></div>
                         <button n:name="send" class="btn btn-primary">Spustit vybranou kontrolu</button>
                     {/form}
                 {/if}
@@ -40,6 +49,8 @@
                         <span class="badge {$source->accessStatus === 'available' ? 'text-bg-success' : ($source->interventionRequired ? 'text-bg-warning' : 'text-bg-light border')}">{$source->accessStatus === 'unknown' ? 'Přístup neověřen' : $source->accessStatus}</span>
                     </div>
                     <a href="{$source->url}" rel="noopener noreferrer" target="_blank" class="small">Otevřít zdroj</a>
+                    <a n:if="$user->isInRole('admin')" n:href="SourceSettings:default $source->id" class="small ms-2">Upravit prioritu</a>
+                    <details class="mt-2"><summary>Zadání kontroly</summary><div n:foreach="$definitions[$source->id] as $d" n:if="$d['active']"><p>{$d['query_text']}</p><p n:if="$d['review_guidance'] !== null" class="small">{$d['review_guidance']}</p><small>Limit: {$d['result_limit'] ?? 'neuveden'} · verze {$d['version']}</small></div></details>
                     <span n:if="$source->recommendedFrequencyHours !== null" class="small text-body-secondary ms-2">Doporučeno po {$source->recommendedFrequencyHours} h</span>
                     <span n:if="$source->stale" class="badge text-bg-warning ms-2">Zastaralý</span>
                     <div class="row g-2 mt-2 small">
@@ -53,12 +64,25 @@
     </div>
 
     <div class="col-12 col-xl-5">
+        <section class="card p-3 mb-4">
+            <h2 class="h5">Ruční vyhledávání</h2>
+            <p>Otevřete dotaz a uložte původní detail nalezené nabídky. Otevření není provedená kontrola.</p>
+            <article n:foreach="$manualSources as $s" class="mb-3">
+                <h3 class="h6">{$s['name']} · {$s['priority']}</h3>
+                <a n:if="$user->isInRole('admin')" n:href="SourceSettings:default $s['id']">Upravit prioritu a dotazy</a>
+                <div n:foreach="$s['definitions'] as $d" class="border rounded p-2 mt-2">
+                    <strong>{$d['name']}</strong><p class="small">{$d['query_text']}</p>
+                    <a href="https://www.google.com/search?q={rawurlencode($d['query_text'])}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">Otevřít v Googlu</a>
+                    <a n:href="OpportunityImport:default, discovery: $d['id']" class="btn btn-sm btn-outline-secondary">Uložit nalezenou nabídku</a>
+                </div>
+            </article>
+        </section>
         <section class="card shadow-sm"><div class="card-body">
             <h2 class="h5">Poslední požadavky</h2>
             <p n:if="count($recentRequests) === 0" class="text-body-secondary mb-0">Zatím nebyla vyžádána žádná kontrola.</p>
             <div n:if="count($recentRequests) > 0" class="list-group list-group-flush">
                 <a n:foreach="$recentRequests as $request" n:href="SearchRequest:detail $request->id" class="list-group-item list-group-item-action px-0">
-                    <div class="d-flex justify-content-between gap-2"><strong>Kontrola #{$request->id}</strong><span class="badge text-bg-light border">{$request->status}</span></div>
+                    <div class="d-flex justify-content-between gap-2"><strong>Kontrola #{$request->id}</strong><span class="badge text-bg-light border">{App\Search\CheckStatus::label($request->status)}</span></div>
                     <div class="small text-body-secondary">{$request->sourceCount} zdrojů · {$request->requestedAt|date:'j. n. Y H:i'}</div>
                 </a>
             </div>

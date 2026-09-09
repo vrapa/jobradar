@@ -16,6 +16,7 @@ final class ApiCredentialService
         'sources:read',
         'search:control',
         'search:write',
+        'search:execute',
         'opportunities:read',
         'opportunities:import',
         'assessments:write',

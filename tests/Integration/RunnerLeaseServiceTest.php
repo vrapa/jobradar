@@ -61,11 +61,11 @@ final class RunnerLeaseServiceTest extends TestCase
             $deviceId = (int) $database->getInsertId();
             $requestId = $requests->request($userId, [$sourceId, $secondSourceId], 'runner-lease-test-' . $unique)->requestId;
 
-            $lease = $leases->claimNext($deviceId);
+            $lease = $leases->claimNext($deviceId, $userId);
             self::assertNotNull($lease);
             $runId = $lease->runId;
             self::assertSame($requestId, $lease->requestId);
-            self::assertSame([$sourceId, $secondSourceId], $lease->sourceIds);
+            self::assertSame([$secondSourceId, $sourceId], $lease->sourceIds);
             self::assertSame(64, strlen($lease->token));
             self::assertSame(hash('sha256', $lease->token), $database->fetchField(
                 'SELECT lease_token_hash FROM search_requests WHERE id = ?',
@@ -86,7 +86,7 @@ final class RunnerLeaseServiceTest extends TestCase
             self::assertNull($planned['pages_traversed']);
             self::assertNull($planned['displayed_count']);
             self::assertNull($planned['finished_at']);
-            $unavailableLease = $leases->claimNext($deviceId);
+            $unavailableLease = $leases->claimNext($deviceId, $userId);
             self::assertNull($unavailableLease);
             $renewedUntil = $leases->renew($deviceId, $requestId, $lease->token);
             self::assertGreaterThanOrEqual($lease->expiresAt, $renewedUntil);
@@ -142,7 +142,7 @@ final class RunnerLeaseServiceTest extends TestCase
                 $now->modify('-1 minute'),
                 $requestId,
             );
-            $resumedLease = $leases->claimNext($deviceId);
+            $resumedLease = $leases->claimNext($deviceId, $userId);
             self::assertNotNull($resumedLease);
             self::assertSame($runId, $resumedLease->runId);
             self::assertSame([$secondSourceId], $resumedLease->sourceIds);

@@ -18,7 +18,7 @@ final class SearchRequestService
     }
 
     /** @param list<int> $sourceIds */
-    public function request(int $userId, array $sourceIds, string $idempotencyKey): SearchRequestResult
+    public function request(int $userId, array $sourceIds, string $idempotencyKey, bool $prepareAccess = false): SearchRequestResult
     {
         $sourceIds = array_values(array_unique($sourceIds));
         sort($sourceIds, SORT_NUMERIC);
@@ -32,9 +32,10 @@ final class SearchRequestService
         $keyHash = hash('sha256', $idempotencyKey);
 
         /** @var SearchRequestResult */
-        return $this->database->transaction(function () use ($userId, $sourceIds, $keyHash): SearchRequestResult {
+        return $this->database->transaction(function () use ($userId, $sourceIds, $keyHash, $prepareAccess): SearchRequestResult {
             $existing = $this->findExisting($userId, $keyHash);
             if ($existing instanceof Row) {
+                if ((bool) $existing['prepare_access'] !== $prepareAccess) { throw new \InvalidArgumentException('Idempotency klíč už označuje jiný režim přípravy.'); }
                 return $this->existingResult($existing, $sourceIds);
             }
             $this->assertSourcesAvailable($sourceIds);
@@ -43,6 +44,8 @@ final class SearchRequestService
                 $this->database->query('INSERT INTO search_requests', [
                     'requested_by_user_id' => $userId,
                     'request_status' => 'waiting_for_runner',
+                    'executor_eligible' => true,
+                    'prepare_access' => $prepareAccess,
                     'idempotency_key_hash' => $keyHash,
                     'requested_at' => $now,
                 ]);
@@ -52,13 +55,14 @@ final class SearchRequestService
                 if (!$existing instanceof Row) {
                     throw new \RuntimeException('Souběžný požadavek se nepodařilo dohledat.');
                 }
+                if ((bool) $existing['prepare_access'] !== $prepareAccess) { throw new \InvalidArgumentException('Idempotency klíč už označuje jiný režim přípravy.'); }
                 return $this->existingResult($existing, $sourceIds);
             }
             foreach ($sourceIds as $sourceId) {
                 $this->database->query('INSERT INTO search_request_sources', [
                     'search_request_id' => $requestId,
                     'source_id' => $sourceId,
-                    'search_definition_id' => null,
+                    'search_definition_id' => $this->database->fetchField('SELECT id FROM source_search_definitions WHERE source_id = ? AND active = 1 AND archived_at IS NULL ORDER BY version DESC, id DESC LIMIT 1', $sourceId),
                 ]);
             }
             $this->auditLogger->record('search.requested', $userId, [
@@ -74,7 +78,7 @@ final class SearchRequestService
     private function findExisting(int $userId, string $keyHash): ?Row
     {
         return $this->database->fetch(
-            'SELECT id, request_status FROM search_requests WHERE requested_by_user_id = ? AND idempotency_key_hash = ?',
+            'SELECT id, request_status, prepare_access FROM search_requests WHERE requested_by_user_id = ? AND idempotency_key_hash = ?',
             $userId,
             $keyHash,
         );
@@ -101,9 +105,10 @@ final class SearchRequestService
     private function assertSourcesAvailable(array $sourceIds): void
     {
         $rows = $this->database->fetchAll(
-            'SELECT id FROM sources WHERE id IN (?) AND active = 1 AND archived_at IS NULL AND source_type <> ?',
+            'SELECT id FROM sources WHERE id IN (?) AND active = 1 AND archived_at IS NULL AND source_type NOT IN (?, ?)',
             $sourceIds,
             'manual',
+            'manual_search',
         );
         $found = array_map(static fn (Row $row): int => (int) $row['id'], $rows);
         sort($found, SORT_NUMERIC);

@@ -50,6 +50,7 @@ final class JobRadarMcpServerFactory
             'properties' => [
                 'sourceIds' => ['type' => 'array', 'minItems' => 1, 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'idempotencyKey' => ['type' => 'string', 'minLength' => 16, 'maxLength' => 200],
+                'prepareAccess' => ['type' => 'boolean', 'default' => false, 'description' => 'Open source access pages in Chrome and wait for explicit owner confirmation before checking offers.'],
             ],
         ];
     }
@@ -103,7 +104,7 @@ final class JobRadarMcpServerFactory
     }
 
     /** @return array<string, mixed> */
-    private static function opportunitySchema(): array
+    public static function opportunitySchema(): array
     {
         return [
             'type' => 'object',
@@ -119,12 +120,14 @@ final class JobRadarMcpServerFactory
                 'summary' => ['type' => ['string', 'null'], 'maxLength' => 65535],
                 'sourceLanguage' => ['type' => ['string', 'null'], 'maxLength' => 16],
                 'incomplete' => ['type' => 'boolean'],
+                'projectCare' => \App\Opportunity\ProjectCareInput::schema(),
+                'discoveryDefinitionId' => ['type' => ['integer','null'], 'minimum' => 1],
             ],
         ];
     }
 
     /** @return array<string, mixed> */
-    private static function assessmentSchema(): array
+    public static function assessmentSchema(): array
     {
         return [
             'type' => 'object',

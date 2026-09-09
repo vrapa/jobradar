@@ -11,14 +11,26 @@ use Nette\Application\UI\Form;
 
 final class OpportunityImportPresenter extends SecuredPresenter
 {
-    public function __construct(private readonly OpportunityImportService $importer)
+    public function __construct(private readonly OpportunityImportService $importer, private readonly \App\Search\SourceSettingsService $settings)
     {
         parent::__construct();
+    }
+
+    public function renderDefault(): void
+    {
+        $discovery = null;
+        if ($this->getParameter('discovery') !== null) {
+            try { $discovery = $this->settings->discoveryDefinition((int) $this->getParameter('discovery')); }
+            catch (\InvalidArgumentException $e) { $this->error($e->getMessage(), 404); }
+        }
+        $this->template->setParameters(['discovery' => $discovery]);
     }
 
     protected function createComponentImportForm(): Form
     {
         $form = new Form();
+        $form->addHidden('discoveryDefinitionId', (string) ($this->getParameter('discovery') ?? ''));
+        \App\Opportunity\ProjectCareForm::add($form);
         $form->addText('url', 'URL nabídky')
             ->setHtmlType('url')
             ->addRule(Form::MaxLength, 'URL smí mít nejvýše %d znaků.', 2048)
@@ -45,8 +57,8 @@ final class OpportunityImportPresenter extends SecuredPresenter
         $form->addCheckbox('incomplete', 'Zdrojový text je neúplný');
         $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');
         $form->addSubmit('send', 'Uložit nabídku');
-        $form->onSuccess[] = function (Form $form, array|object $values): void {
-            $this->importFormSucceeded($form, (array) $values);
+        $form->onSuccess[] = function (Form $form): void {
+            $this->importFormSucceeded($form, (array) $form->getValues());
         };
 
         return $form;
@@ -66,6 +78,8 @@ final class OpportunityImportPresenter extends SecuredPresenter
                 summary: $this->nullable($values['summary'] ?? null),
                 sourceLanguage: $this->nullable($values['sourceLanguage'] ?? null),
                 incomplete: (bool) ($values['incomplete'] ?? false),
+                projectCare: ($values['projectCareValue'] ?? '') === '' ? null : \App\Opportunity\ProjectCareForm::read($values),
+                discoveryDefinitionId: ($values['discoveryDefinitionId'] ?? '') === '' ? null : (int) $values['discoveryDefinitionId'],
             ), (int) $this->getUser()->getId());
         } catch (\InvalidArgumentException $exception) {
             $form->addError($exception->getMessage());

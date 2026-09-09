@@ -64,7 +64,7 @@ final class SearchRequestControlServiceTest extends TestCase
             ]);
             $deviceId = (int) $database->getInsertId();
             $requestId = $requests->request($userId, [$sourceId, $secondSourceId], 'runner-control-test-' . $unique)->requestId;
-            $lease = $leases->claimNext($deviceId);
+            $lease = $leases->claimNext($deviceId, $userId);
             self::assertNotNull($lease);
             $runId = $lease->runId;
             $runs->startSource($requestId, $lease->token, $sourceId, new SourceRunScope('Přihlášený seznam nabídek.'));
@@ -74,10 +74,10 @@ final class SearchRequestControlServiceTest extends TestCase
                 $sourceId,
                 new SourceRunResult('waiting_for_login', incompleteReason: 'Relace vyžaduje přihlášení.'),
             );
-            self::assertSame('waiting_for_login', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
+            self::assertSame('running', $database->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $requestId));
             $waitingDetail = $queries->getRequestDetail($userId, $requestId);
             self::assertNotNull($waitingDetail);
-            self::assertTrue($waitingDetail->canResume());
+            self::assertFalse($waitingDetail->canResume());
             self::assertSame(0, $waitingDetail->checkedSourceCount());
             self::assertCount(2, $waitingDetail->sources);
             self::assertSame('Přihlášený seznam nabídek.', $waitingDetail->sources[0]->queryText);
@@ -104,7 +104,7 @@ final class SearchRequestControlServiceTest extends TestCase
             self::assertSame('resume_requested', $controls->requestResume($userId, $requestId));
             self::assertNull($database->fetchField('SELECT lease_token_hash FROM search_requests WHERE id = ?', $requestId));
 
-            $resumedLease = $leases->claimNext($deviceId);
+            $resumedLease = $leases->claimNext($deviceId, $userId);
             self::assertNotNull($resumedLease);
             self::assertSame($runId, $resumedLease->runId);
             self::assertSame([$sourceId], $resumedLease->sourceIds);

@@ -5,6 +5,7 @@
 /.phpstan-cache/
 /.phpunit.cache/
 /node_modules/
+__pycache__/
 /vendor/
 /var/*
 !/var/.gitignore

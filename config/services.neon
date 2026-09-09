@@ -29,11 +29,9 @@ services:
 		factory: App\Runner\CurlRunnerHttpClient
 	runWorkerOnceCommand:
 		factory: App\Console\RunWorkerOnceCommand
-		arguments:
-			apiUrl: %runner.apiUrl%
-			token: %runner.token%
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
+	- App\Opportunity\ProjectCareService
 	- App\Opportunity\OpportunityQueryService
 	- App\Opportunity\OpportunityTermsService
 	- App\Opportunity\OpportunityJsonMapper
@@ -47,10 +45,14 @@ services:
 	- App\Assessment\AssessmentPayloadMapper
 	- App\Search\SearchRequestService
 	- App\Search\SourceQueryService
+	- App\Search\SourceSettingsService
+	- App\Search\AccessPreparationService
 	- App\Search\RunnerLeaseService
 	- App\Search\SearchRunService
 	- App\Search\SearchRequestControlService
 	- App\Search\RunnerDeviceService
+	- App\Search\ExecutionService
+	- App\Api\V1\ExecutionHandler
 	- App\Api\Auth\ApiCredentialService
 	- App\Api\Auth\ApiRequestContext
 	- App\Api\AssistantActionService
@@ -93,6 +95,10 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'search:write'
+	executionApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'search:execute'
 	opportunitiesReadApiAuthorization:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
@@ -117,6 +123,7 @@ services:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'sources'), 'App\Api\V1\SourcesHandler', @sourcesApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'runner', 'execution'), 'App\Api\V1\ExecutionHandler', @executionApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'sources', 'requiring-login'), 'App\Api\V1\LoginRequiredSourcesHandler', @sourcesApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'search-requests'), 'App\Api\V1\CreateSearchRequestHandler', @searchControlApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'search-requests', 'detail'), 'App\Api\V1\GetSearchRequestHandler', @searchControlApiAuthorization)

@@ -26,7 +26,8 @@ final class RunnerLeaseApiHandlerTest extends TestCase
         $database = $container->getByType(Connection::class);
         $context = $container->getByType(ApiRequestContext::class);
         $requests = $container->getByType(SearchRequestService::class);
-        $claim = $container->getByType(ClaimRunnerLeaseHandler::class);
+        $claim = $container->getByType(\App\Api\V1\ExecutionHandler::class);
+        self::assertSame(410, $container->getByType(ClaimRunnerLeaseHandler::class)->handle([])->getCode());
         $renew = $container->getByType(RenewRunnerLeaseHandler::class);
         $progress = $container->getByType(RecordSourceProgressHandler::class);
         $unique = bin2hex(random_bytes(8));
@@ -62,12 +63,13 @@ final class RunnerLeaseApiHandlerTest extends TestCase
             $sourceId = (int) $database->getInsertId();
             $requestId = $requests->request($userId, [$sourceId], 'runner-api-lease-' . $unique)->requestId;
             $context->authenticate(new ApiIdentity(
-                1, $clientId, $userId, 'synthetic-runner', 'Synthetic runner', 'runner', ['search:write'],
+                1, $clientId, $userId, 'synthetic-runner', 'Synthetic runner', 'runner', ['search:execute'],
             ));
 
-            $claimResponse = self::json($claim->handle([]));
+            $claimResponse = self::json($claim->handle(['body' => ['operation' => 'claim']]));
             self::assertSame(200, $claimResponse->getCode());
             $claimPayload = self::payload($claimResponse);
+            $claimPayload['data'] = $claimPayload['data']['lease'];
             self::assertSame($requestId, $claimPayload['data']['request_id']);
             $runId = $claimPayload['data']['run_id'];
             $leaseToken = $claimPayload['data']['lease_token'];

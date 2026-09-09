@@ -9,6 +9,7 @@ final class OpportunityJsonMapper
     private const ALLOWED_KEYS = [
         'url', 'originalTitle', 'originalText', 'companyName', 'translatedTitle',
         'translatedText', 'summary', 'sourceLanguage', 'incomplete',
+        'projectCare', 'discoveryDefinitionId',
     ];
 
     public function __construct(private readonly UrlNormalizer $urlNormalizer)
@@ -42,6 +43,7 @@ final class OpportunityJsonMapper
                 ));
             }
             $url = $this->requiredString($item, 'url', $index);
+            if (isset($item['discoveryDefinitionId']) && (!is_int($item['discoveryDefinitionId']) || $item['discoveryDefinitionId'] < 1)) { throw new \InvalidArgumentException('Neplatná definice nalezení.'); }
             $this->urlNormalizer->normalize($url);
             $imports[] = new OpportunityImport(
                 url: $url,
@@ -53,6 +55,8 @@ final class OpportunityJsonMapper
                 summary: $this->optionalString($item, 'summary', $index),
                 sourceLanguage: $this->optionalString($item, 'sourceLanguage', $index),
                 incomplete: $this->optionalBool($item, 'incomplete', $index),
+                projectCare: ProjectCareInput::fromPayload($item['projectCare'] ?? null),
+                discoveryDefinitionId: $item['discoveryDefinitionId'] ?? null,
             );
         }
 

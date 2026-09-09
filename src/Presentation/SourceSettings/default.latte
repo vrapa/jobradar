@@ -1,0 +1,23 @@
+{block title}Nastavení zdroje{/block}
+{block content}
+<h1 class="h3">{$source['name']}</h1>
+<div class="card p-3 mb-3">
+{form settingsForm}
+    <div n:if="$form->hasErrors()" class="alert alert-danger" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+    <div class="mb-3"><label n:name="priority" class="form-label">Priorita</label><select n:name="priority" class="form-select"></select></div>
+    {if $source['source_type'] === 'manual_search'}
+    <div class="mb-3"><label n:name="name" class="form-label">Název dotazu</label><input n:name="name" class="form-control"><div class="form-text">Prázdný název změní pouze prioritu zdroje. Stejný název vytvoří novou verzi dotazu.</div></div>
+    <div class="mb-3"><label n:name="query" class="form-label">Vyhledávací dotaz</label><textarea n:name="query" class="form-control" rows="3"></textarea></div>
+    <div class="form-check mb-3"><input n:name="active" class="form-check-input"><label n:name="active" class="form-check-label">Dotaz aktivní</label></div>
+    {/if}
+    <button n:name="send" class="btn btn-primary">Uložit</button>
+{/form}
+</div>
+{if $source['source_type'] === 'manual_search'}
+<h2 class="h5">Uložené dotazy</h2>
+<p>Stejný název uloží novou verzi dotazu. Vypnutím „Dotaz aktivní“ jej deaktivujete.</p>
+<p><a n:href="this, definition: null">Přidat nový dotaz</a></p>
+<ul><li n:foreach="$definitions as $d"><a n:href="this, definition: $d['id']">{$d['name']}</a> · verze {$d['version']} · {$d['active'] ? 'aktivní' : 'neaktivní'}</li></ul>
+{/if}
+<a n:href="Source:" class="btn btn-outline-secondary">Zpět na zdroje</a>
+{/block}

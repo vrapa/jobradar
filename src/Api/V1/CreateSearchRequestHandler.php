@@ -39,6 +39,7 @@ final class CreateSearchRequestHandler extends BaseHandler
             'properties' => [
                 'source_ids' => ['type' => 'array', 'minItems' => 1, 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'idempotency_key' => ['type' => 'string', 'minLength' => 16, 'maxLength' => 200],
+                'prepare_access' => ['type' => 'boolean', 'default' => false],
             ],
         ], JSON_THROW_ON_ERROR)))->setRequired()];
     }
@@ -51,6 +52,7 @@ final class CreateSearchRequestHandler extends BaseHandler
             return self::error(422, 'invalid_request', 'Požadavek nemá platný datový tvar.');
         }
         try {
+            if (isset($body['prepare_access']) && !is_bool($body['prepare_access'])) { throw new \InvalidArgumentException('prepare_access musí být boolean.'); }
             $sourceIds = array_values(array_map(static function (mixed $id): int {
                 if (!is_int($id)) {
                     throw new \InvalidArgumentException('ID zdroje musí být celé číslo.');
@@ -64,6 +66,7 @@ final class CreateSearchRequestHandler extends BaseHandler
                 $this->requestContext->identity()->ownerUserId,
                 $sourceIds,
                 $body['idempotency_key'],
+                $body['prepare_access'] ?? false,
             );
         } catch (\InvalidArgumentException $exception) {
             return self::error(422, 'invalid_request', $exception->getMessage());

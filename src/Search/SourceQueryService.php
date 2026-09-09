@@ -53,10 +53,11 @@ final class SourceQueryService
                     INNER JOIN search_run_sources run_source ON run_source.id = found.search_run_source_id
                     GROUP BY run_source.source_id
                  ) found ON found.source_id = s.id
-                 WHERE s.active = 1 AND s.archived_at IS NULL AND s.source_type <> ?
-                 ORDER BY s.priority, s.name',
+                 WHERE s.active = 1 AND s.archived_at IS NULL AND s.source_type NOT IN (?, ?)
+                 ORDER BY s.priority, s.name, s.id',
                 'complete',
                 'manual',
+                'manual_search',
             ),
         );
     }
@@ -142,7 +143,7 @@ final class SourceQueryService
                     ON run_source.search_run_id = run.id AND run_source.source_id = request_source.source_id
                  LEFT JOIN source_access_states access ON access.source_id = source.id
                  WHERE request_source.search_request_id = ?
-                 ORDER BY source.priority, source.name',
+                 ORDER BY source.priority, source.name, source.id',
                 $requestId,
             ),
         );
@@ -190,7 +191,46 @@ final class SourceQueryService
                 static fn (SearchRunSourceView $source): bool => $source->status === 'error',
             )),
             requestedAt: $request->requestedAt,
+            partialCount: count(array_filter($request->sources, static fn (SearchRunSourceView $source): bool => $source->status === 'partial')),
+            pendingCount: count(array_filter($request->sources, static fn (SearchRunSourceView $source): bool => in_array($source->status, ['planned', 'running'], true))),
+            unverifiedCount: count(array_filter($request->sources, static fn (SearchRunSourceView $source): bool => in_array($source->status, ['waiting_for_login', 'error', 'cancelled'], true))),
         );
+    }
+
+    /** Latest requested check per source, not merely the latest request.
+     * @return list<array<string, mixed>>
+     */
+    public function unresolvedSources(int $userId): array
+    {
+        return array_map(static fn (Row $row): array => (array) $row, $this->database->fetchAll(
+            "SELECT s.id, s.name, s.url, q.id AS request_id, q.request_status, q.requested_at,
+                    COALESCE(rs.source_status, 'planned') AS source_status, rs.incomplete_reason, rs.error_code,
+                    rs.started_at, rs.finished_at, rs.query_text, rs.pages_traversed, rs.displayed_count,
+                    rs.detail_opened_count, rs.checkpoint_at, a.login_url,
+                    (SELECT MAX(done.finished_at) FROM search_run_sources done
+                     JOIN search_runs dr ON dr.id = done.search_run_id JOIN search_requests dq ON dq.id = dr.search_request_id
+                     WHERE done.source_id = s.id AND done.source_status = 'complete' AND dq.requested_by_user_id = ?) AS last_success_at
+             FROM sources s JOIN search_request_sources qs ON qs.source_id = s.id
+             JOIN search_requests q ON q.id = qs.search_request_id
+             LEFT JOIN search_runs r ON r.search_request_id = q.id
+             LEFT JOIN search_run_sources rs ON rs.search_run_id = r.id AND rs.source_id = s.id
+             LEFT JOIN source_access_states a ON a.source_id = s.id
+             WHERE q.requested_by_user_id = ? AND s.active = 1 AND s.archived_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM search_request_sources newer JOIN search_requests nq ON nq.id = newer.search_request_id
+                   WHERE newer.source_id = s.id AND nq.requested_by_user_id = q.requested_by_user_id
+                   AND (nq.requested_at > q.requested_at OR (nq.requested_at = q.requested_at AND nq.id > q.id)))
+               AND (rs.source_status IS NULL OR rs.source_status <> 'complete')
+             ORDER BY s.priority, s.name, s.id", $userId, $userId,
+        ));
+    }
+
+    /** @return array<string, mixed>|null */
+    public function executorStatus(int $userId): ?array
+    {
+        $row = $this->database->fetch('SELECT d.name, d.device_status, d.last_seen_at FROM runner_devices d
+            JOIN api_clients c ON c.id = d.api_client_id WHERE c.created_by_user_id = ? AND d.revoked_at IS NULL
+            ORDER BY d.last_seen_at DESC LIMIT 1', $userId);
+        return $row === null ? null : (array) $row;
     }
 
     private static function nullableString(mixed $value): ?string

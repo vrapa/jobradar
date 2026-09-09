@@ -1,6 +1,18 @@
 {block title}{$opportunity->title}{/block}
 
 {block content}
+<details class="card p-3 mb-3" n:attr="open: $presenter['projectCareForm']->hasErrors()">
+    <summary>Převzetí / péče o existující aplikaci: {if count($opportunity->projectCareHistory) === 0 || $opportunity->projectCareHistory[0]['value'] === null}neověřeno{else}{$opportunity->projectCareHistory[0]['value'] ? 'ano' : 'ne'}{/if}</summary>
+    {form projectCareForm}
+        <div n:if="$form->hasErrors()" class="alert alert-danger mt-3" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+        <div class="my-3"><label n:name="projectCareValue" class="form-label">Převzetí / péče o existující aplikaci</label><select n:name="projectCareValue" class="form-select"></select></div>
+        <div class="mb-3"><label n:name="projectCareReason" class="form-label">Zdůvodnění klasifikace</label><textarea n:name="projectCareReason" class="form-control"></textarea></div>
+        <div class="mb-3"><label n:name="projectCareConfidence" class="form-label">Jistota 0–1</label><input n:name="projectCareConfidence" class="form-control"></div>
+        <button n:name="send" class="btn btn-primary mb-3">Uložit klasifikaci</button>
+    {/form}
+    <ul><li n:foreach="$opportunity->projectCareHistory as $c">{$c['created_at']} · verze nabídky #{$c['source_version_id']} · {$c['value'] === null ? 'neověřeno' : ($c['value'] ? 'ano' : 'ne')} · {$c['reason']} · jistota {$c['confidence'] ?? 'neznámá'} · ověřeno {$c['verified_at'] ?? 'neověřeno'}</li></ul>
+</details>
+<div n:if="count($opportunity->discoveries) > 0" class="card p-3 mb-3"><h2 class="h6">Cesta nalezení</h2><p n:foreach="$opportunity->discoveries as $d">{$d['source_name']} · {$d['query_text']} · {$d['discovered_at']}</p></div>
 <nav aria-label="Drobečková navigace" class="mb-3">
     <a n:href="Home:" class="text-decoration-none">Nabídky</a>
     <span class="text-body-secondary mx-2" aria-hidden="true">/</span>

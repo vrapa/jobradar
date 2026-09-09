@@ -25,6 +25,7 @@ final class OpportunityTransformer
             'found_at' => $opportunity->foundAt->format(DATE_ATOM),
             'decision' => $opportunity->decision->value,
             'workflow_status' => $opportunity->workflowStatus,
+            'project_care' => $opportunity->projectCare,
             'rate' => [
                 'min' => $opportunity->rateMin,
                 'max' => $opportunity->rateMax,
@@ -64,6 +65,9 @@ final class OpportunityTransformer
             'found_at' => $opportunity->foundAt->format(DATE_ATOM),
             'decision' => $opportunity->decisionState->decision->value,
             'workflow_status' => $opportunity->decisionState->workflowStatus,
+            'project_care_history' => $opportunity->projectCareHistory,
+            'project_care' => $opportunity->projectCareHistory[0]['value'] ?? null,
+            'discoveries' => $opportunity->discoveries,
             'rate' => [
                 'min' => $opportunity->terms?->rateMin,
                 'max' => $opportunity->terms?->rateMax,

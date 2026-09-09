@@ -24,6 +24,9 @@ final class SearchRequestControlService
         return $this->database->transaction(function () use ($userId, $requestId): string {
             $request = $this->ownedRequest($userId, $requestId);
             $status = (string) $request['request_status'];
+            if ((bool) $request['prepare_access'] && $request['access_confirmed_at'] === null) {
+                throw new \InvalidArgumentException('Nejprve potvrďte připravené přihlášení v detailu požadavku.');
+            }
             if ($status === 'resume_requested') {
                 return $status;
             }
@@ -87,7 +90,7 @@ final class SearchRequestControlService
     private function ownedRequest(int $userId, int $requestId): Row
     {
         $request = $this->database->fetch(
-            'SELECT request_status FROM search_requests WHERE id = ? AND requested_by_user_id = ? FOR UPDATE',
+            'SELECT request_status, prepare_access, access_confirmed_at FROM search_requests WHERE id = ? AND requested_by_user_id = ? FOR UPDATE',
             $requestId,
             $userId,
         );

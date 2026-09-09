@@ -24,11 +24,12 @@ final class JobRadarMcpTools
     }
 
     /** @param list<int> $sourceIds */
-    public function requestSearch(array $sourceIds, string $idempotencyKey): CallToolResult
+    public function requestSearch(array $sourceIds, string $idempotencyKey, bool $prepareAccess = false): CallToolResult
     {
         return self::result($this->api->post('/search-requests', [
             'source_ids' => $sourceIds,
             'idempotency_key' => $idempotencyKey,
+            'prepare_access' => $prepareAccess,
         ]));
     }
 
