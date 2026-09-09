@@ -72,8 +72,8 @@ final class OpportunityTermsPresenter extends SecuredPresenter
         $form->addTextArea('otherTechnologies', 'Další technologie')->setHtmlAttribute('rows', 2);
         $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');
         $form->addSubmit('send', 'Uložit podmínky');
-        $form->onSuccess[] = function (Form $form, array|object $values): void {
-            $this->termsFormSucceeded($form, (array) $values);
+        $form->onSuccess[] = function (Form $form): void {
+            $this->termsFormSucceeded($form, (array) $form->getValues());
         };
 
         return $form;

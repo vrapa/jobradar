@@ -33,8 +33,8 @@ final class SignPresenter extends BasePresenter
             ->setRequired('Zadejte heslo.');
         $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');
         $form->addSubmit('send', 'Přihlásit se');
-        $form->onSuccess[] = function (array|object $values) use ($form): void {
-            $this->signInFormSucceeded($form, $values);
+        $form->onSuccess[] = function (Form $form): void {
+            $this->signInFormSucceeded($form, $form->getValues());
         };
 
         return $form;
