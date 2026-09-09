@@ -30,7 +30,15 @@ final class OpportunityQueryService
     /** @return list<OpportunitySummary> */
     public function listReactionQueue(int $userId): array
     {
-        return $this->listByDecisionVisibility($userId, false, true);
+        return array_values(array_filter($this->listByDecisionVisibility($userId, false, true),
+            static fn (OpportunitySummary $item): bool => in_array($item->workflowStatus, ['none', 'preparing', 'awaiting_approval'], true)));
+    }
+
+    /** @return list<OpportunitySummary> */
+    public function listAwaitingResponse(int $userId): array
+    {
+        return array_values(array_filter([...$this->listCurrent($userId), ...$this->listUninteresting($userId)],
+            static fn (OpportunitySummary $item): bool => in_array($item->workflowStatus, ['submitted', 'awaiting_response'], true)));
     }
 
     /** @return list<OpportunitySummary> */

@@ -1,0 +1,17 @@
+{block title}Čekáme na odpověď{/block}
+{block content}
+<header class="mb-4">
+    <h1 class="display-6 fw-bold">Čekáme na odpověď</h1>
+    <p class="lead text-body-secondary">Odeslané reakce. Termín kontroly odpovědi najdete v navazujících úkolech nabídky a po synchronizaci v Todoistu.</p>
+</header>
+<p n:if="$opportunityCount === 0" class="alert alert-light border">Žádná nabídka nyní nečeká na odpověď.</p>
+<div class="row g-3">
+    <div n:foreach="$opportunities as $opportunity" class="col-12 col-lg-6">
+        <article class="card h-100 shadow-sm"><div class="card-body">
+            <span class="badge text-bg-primary mb-2">Čekáme na odpověď</span>
+            <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id">{$opportunity->title}</a></h2>
+            <p class="text-body-secondary mb-0">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>
+        </div></article>
+    </div>
+</div>
+{/block}

@@ -62,6 +62,12 @@ final class HomePresenter extends SecuredPresenter
         ]);
     }
 
+    public function renderAwaitingResponse(): void
+    {
+        $items = $this->opportunities->listAwaitingResponse((int) $this->getUser()->getId());
+        $this->template->setParameters(['opportunities' => $items, 'opportunityCount' => count($items)]);
+    }
+
     /** @return Multiplier<Form> */
     protected function createComponentQuickDecision(): Multiplier
     {

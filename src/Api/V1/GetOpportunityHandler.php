@@ -21,6 +21,8 @@ final class GetOpportunityHandler extends BaseHandler
         private readonly OpportunityTransformer $transformer,
         private readonly AssessmentQueryService $assessments,
         private readonly AssessmentTransformer $assessmentTransformer,
+        private readonly \App\Application\ApplicationWorkflowService $workflow,
+        private readonly \App\Action\ActionItemService $actions,
     ) {
         parent::__construct();
     }
@@ -47,6 +49,8 @@ final class GetOpportunityHandler extends BaseHandler
             return new JsonApiResponse(404, ['error' => ['code' => 'opportunity_not_found', 'message' => 'Nabídka nebyla nalezena.']]);
         }
         $data = $this->transformer->transformDetail($opportunity);
+        $data['application_history'] = $this->workflow->history($this->requestContext->identity()->ownerUserId, $id);
+        $data['action_items'] = $this->actions->listForOpportunity($this->requestContext->identity()->ownerUserId, $id);
         $assessment = $this->assessments->getCurrent($id);
         $data['current_assessment'] = $assessment === null ? null : $this->assessmentTransformer->transform($assessment);
         if ($assessment !== null) {

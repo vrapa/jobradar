@@ -30,6 +30,8 @@ final class JobRadarMcpToolsTest extends TestCase
                 ['id' => 1, 'decision' => 'undecided'],
                 ['id' => 2, 'decision' => 'react'],
                 ['id' => 3, 'decision' => 'uninteresting'],
+                ['id' => 4, 'decision' => 'react', 'workflow_status' => 'awaiting_response'],
+                ['id' => 5, 'decision' => 'react', 'workflow_status' => 'closed'],
             ], 'meta' => ['count' => 3]]),
             new RunnerHttpResponse(200, ['data' => [
                 'id' => 7,

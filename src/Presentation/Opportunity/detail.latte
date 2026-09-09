@@ -86,12 +86,94 @@
     </div>
 </section>
 
+<section class="card shadow-sm mb-4" aria-labelledby="action-items-title">
+    <div class="card-body">
+        <h2 id="action-items-title" class="h5">Navazující úkoly</h2>
+        <p class="small text-body-secondary">Sem patří jen konkrétní krok nebo termín. Nabídka, rozhodnutí a stav žádosti zůstávají v JobRadaru; Todoist je pouze externí připomínka.</p>
+        <div n:if="count($actionItems) === 0" class="text-body-secondary mb-3">Zatím není evidován žádný navazující úkol.</div>
+        <ul n:if="count($actionItems) > 0" class="list-group mb-3">
+            <li n:foreach="$actionItems as $item" class="list-group-item">
+                <div class="d-flex flex-wrap justify-content-between gap-2">
+                    <strong>{$item['title']}</strong>
+                    <span class="badge {$item['status'] === 'open' ? 'text-bg-primary' : ($item['status'] === 'completed' ? 'text-bg-success' : 'text-bg-secondary')}">{$item['status'] === 'open' ? 'Otevřeno' : ($item['status'] === 'completed' ? 'Hotovo' : 'Zrušeno')}</span>
+                </div>
+                <div class="small text-body-secondary">{App\Action\ActionItemService::TYPES[$item['action_type']]}{if $item['due_at'] !== null} · termín {$item['due_at']|date:'j. n. Y H:i'}{/if}</div>
+                <div n:if="$item['details'] !== null" class="preserve-lines mt-2">{$item['details']}</div>
+                <a n:if="$item['external_url'] !== null" href="{$item['external_url']}" rel="noopener noreferrer" target="_blank" class="small">Otevřít úkol v Todoistu</a>
+                <span n:if="$item['external_id'] !== null && $item['external_url'] === null" class="small text-body-secondary">Propojeno s Todoistem</span>
+            </li>
+        </ul>
+        <details class="mb-3" open>
+            <summary class="fw-semibold">Přidat konkrétní krok</summary>
+            {form actionItemForm, class: 'mt-3'}
+                <div n:if="$form->hasErrors()" class="alert alert-danger"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+                <div class="row g-3">
+                    <div class="col-12 col-md-4"><label n:name="type" class="form-label">Typ kroku</label><select n:name="type" class="form-select"></select></div>
+                    <div class="col-12 col-md-8"><label n:name="title" class="form-label">Konkrétní další krok</label><input n:name="title" class="form-control"></div>
+                    <div class="col-12 col-md-8"><label n:name="details" class="form-label">Podrobnosti</label><textarea n:name="details" class="form-control"></textarea></div>
+                    <div class="col-12 col-md-4"><label n:name="dueAt" class="form-label">Termín</label><input n:name="dueAt" class="form-control"></div>
+                    <div class="col-12"><button n:name="send" class="btn btn-primary">Přidat navazující úkol</button></div>
+                </div>
+            {/form}
+        </details>
+        <details n:if="$openActionItemCount > 0">
+            <summary class="fw-semibold">Uzavřít navazující úkol</summary>
+            {form actionItemStatusForm, class: 'mt-3 d-flex flex-wrap gap-2 align-items-end'}
+                <div><label n:name="actionItemId" class="form-label">Otevřený úkol</label><select n:name="actionItemId" class="form-select"></select></div>
+                <button n:name="complete" class="btn btn-success">Označit jako hotové</button>
+                <button n:name="cancel" class="btn btn-outline-secondary">Zrušit úkol</button>
+            {/form}
+        </details>
+    </div>
+</section>
+
+<section class="card shadow-sm mb-4" aria-labelledby="application-title">
+    <div class="card-body">
+        <h2 id="application-title" class="h5">Stav reakce: {$workflowLabels[$opportunity->decisionState->workflowStatus] ?? $opportunity->decisionState->workflowStatus}</h2>
+        <p class="text-body-secondary">Připravený text čeká na schválení. Až po skutečném odeslání přejde nabídka do „Čekáme na odpověď“. Tento formulář pouze zaznamenává stav.</p>
+        {if $opportunity->decisionState->workflowStatus !== 'closed' && ($opportunity->decisionState->decision->value === 'react' || $opportunity->decisionState->workflowStatus !== 'none')}
+        <details n:attr="open => $presenter['applicationForm']->hasErrors()">
+            <summary class="fw-semibold">Zaznamenat přípravu, odeslání nebo odpověď</summary>
+            {form applicationForm, class: 'mt-3'}
+                <div n:if="$form->hasErrors()" class="alert alert-danger"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+                <div class="row g-3">
+                    <div class="col-md-6"><label n:name="event" class="form-label">Co se stalo</label><select n:name="event" class="form-select"></select></div>
+                    <div class="col-md-6"><label n:name="occurredAt" class="form-label">Kdy se to stalo (Praha)</label><input n:name="occurredAt" class="form-control"></div>
+                    <div class="col-12"><label n:name="reference" class="form-label">Podklad nebo potvrzení</label><textarea n:name="reference" class="form-control" rows="2"></textarea><div class="form-text">Příprava: cesta k finálnímu návrhu. Odeslání: konkrétní potvrzení portálu nebo ID ověřeného odeslaného e-mailu. Odpověď: odkaz či ID přijaté zprávy. Nezadávejte hesla ani celé zprávy.</div></div>
+                </div>
+                <fieldset class="border rounded p-3 my-3">
+                    <legend class="float-none w-auto fs-6 px-2">Vyplňte pouze při zaznamenání odeslání</legend>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label n:name="channel" class="form-label">Kanál odeslání</label><select n:name="channel" class="form-select"></select></div>
+                        <div class="col-md-6"><label n:name="followUpAt" class="form-label">Kdy zkontrolovat odpověď (Praha)</label><input n:name="followUpAt" class="form-control"><div class="form-text">Návrh: za 7 dní. Upravte podle dohody s firmou; tento čas se přenese do Todoistu.</div></div>
+                        <div class="col-12"><label n:name="approvalReference" class="form-label">Kde je výslovné schválení odeslání</label><input n:name="approvalReference" class="form-control" placeholder="Např. schválení konečné verze v tasku Práce, datum a čas"></div>
+                        <div class="col-12"><label n:name="completeIds" class="form-label">Přípravné úkoly dokončené odesláním (volitelné)</label><select n:name="completeIds" class="form-select"></select><div class="form-text">Vyberte jen úkoly, které jsou opravdu hotové. Uzavřou se i v Todoistu.</div></div>
+                        <div class="col-12"><label><input n:name="confirmSent" class="form-check-input"> Potvrzuji skutečné schválené odeslání s doloženým potvrzením.</label></div>
+                    </div>
+                </fieldset>
+                <button n:name="save" class="btn btn-primary">Uložit stav reakce</button>
+            {/form}
+        </details>
+        {elseif $opportunity->decisionState->workflowStatus === 'closed'}<p class="mb-0">Jednání je uzavřeno; historie zůstává uložená.</p>
+        {else}<p class="mb-0">Pro přípravu nejprve zvolte Reagovat.</p>{/if}
+        <details n:if="count($applicationHistory) > 0" class="mt-3">
+            <summary>Historie reakce ({count($applicationHistory)})</summary>
+            <ol class="mt-2">
+                <li n:foreach="$applicationHistory as $event">
+                    <strong>{$workflowLabels[$event['workflow_status']]}</strong> — {$event['details']['occurred_at']}<br>
+                    {$event['details']['reference']}
+                </li>
+            </ol>
+        </details>
+    </div>
+</section>
+
 <section class="card shadow-sm mb-4 border-primary-subtle" aria-labelledby="decision-title">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h2 id="decision-title" class="h5 mb-0">Moje rozhodnutí</h2>
             <span class="badge {if $opportunity->decisionState->decision->value === 'react'}text-bg-success{elseif $opportunity->decisionState->decision->value === 'uninteresting'}text-bg-secondary{else}text-bg-light border{/if}">
-                {if $opportunity->decisionState->decision->value === 'react'}K reakci{elseif $opportunity->decisionState->decision->value === 'uninteresting'}Nezajímavé{else}Nerozhodnuto{/if}
+                {if $opportunity->decisionState->decision->value === 'react'}Zájem: reagovat{elseif $opportunity->decisionState->decision->value === 'uninteresting'}Nezajímavé{else}Nerozhodnuto{/if}
             </span>
         </div>
         <p class="small text-body-secondary">„Reagovat“ nabídku pouze zařadí do interní fronty. Nic neodešle a nepředá žádné osobní údaje.</p>

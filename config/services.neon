@@ -36,6 +36,8 @@ services:
 	- App\Opportunity\OpportunityQueryService
 	- App\Opportunity\OpportunityTermsService
 	- App\Opportunity\OpportunityJsonMapper
+	- App\Action\ActionItemService
+	- App\Application\ApplicationWorkflowService
 	- App\Decision\OpportunityDecisionService
 	- App\Decision\DecisionQueryService
 	- App\Decision\DecisionDelegationService
@@ -78,6 +80,12 @@ services:
 	- App\Api\V1\SaveOpportunityAssessmentHandler
 	- App\Api\V1\CreateDecisionDelegationHandler
 	- App\Api\V1\ApplyDecisionDelegationHandler
+	- App\Api\V1\ListActionItemsHandler
+	- App\Api\V1\LinkExternalTaskHandler
+	- App\Api\V1\CompleteActionItemHandler
+	- App\Api\V1\RecordApplicationEventHandler
+	- App\Api\V1\ListLinkedActionItemsHandler
+	- App\Api\V1\AcknowledgeActionItemHandler
 	- Tomaj\NetteApi\Misc\IpDetector
 	apiOutputConfigurator: Tomaj\NetteApi\Output\Configurator\EnvConfigurator
 	apiErrorHandler: Tomaj\NetteApi\Error\DefaultErrorHandler
@@ -121,6 +129,18 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'assessments:write'
+	actionItemsReadApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'action_items:read'
+	actionItemsWriteApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'action_items:write'
+	applicationsWriteApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'applications:write'
 	apiDecider:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
@@ -141,3 +161,9 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'opportunities', 'assessment'), 'App\Api\V1\SaveOpportunityAssessmentHandler', @assessmentsWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'decision-delegations'), 'App\Api\V1\CreateDecisionDelegationHandler', @decisionsDelegateApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'decision-delegations', 'decisions'), 'App\Api\V1\ApplyDecisionDelegationHandler', @decisionsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'action-items'), 'App\Api\V1\ListActionItemsHandler', @actionItemsReadApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'applications', 'events'), 'App\Api\V1\RecordApplicationEventHandler', @applicationsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'action-items', 'linked'), 'App\Api\V1\ListLinkedActionItemsHandler', @actionItemsReadApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'action-items', 'synced'), 'App\Api\V1\AcknowledgeActionItemHandler', @actionItemsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'action-items', 'external-task'), 'App\Api\V1\LinkExternalTaskHandler', @actionItemsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'action-items', 'complete'), 'App\Api\V1\CompleteActionItemHandler', @actionItemsWriteApiAuthorization)

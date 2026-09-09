@@ -37,6 +37,12 @@ final class JobRadarMcpServerFactory
             ->addTool([$tools, 'createDecisionDelegation'], 'create_decision_delegation', description: 'Create a time-limited delegation over an exact assessed opportunity list. Use only after an explicit user instruction; requires the separate decisions:delegate scope and never submits.', annotations: $safeWrite, inputSchema: self::wrappedObjectSchema('delegation', self::delegationSchema()))
             ->addTool([$tools, 'setDecision'], 'set_decision', description: 'Apply one reversible decision under an active single-opportunity delegation. React only queues preparation and never submits.', annotations: $safeWrite, inputSchema: self::targetAndObjectSchema('decision', self::decisionSchema()))
             ->addTool([$tools, 'setDecisionsBatch'], 'set_decisions_batch', description: 'Atomically apply the complete explicitly delegated batch. Any stale manual state rejects every item; React never submits.', annotations: $safeWrite, inputSchema: self::delegationAndObjectSchema('batch', self::decisionBatchSchema()))
+            ->addTool([$tools, 'listPendingActionItems'], 'list_pending_action_items', description: 'List open concrete next actions that are not yet linked to Todoist. These are tasks, not an offer database.', annotations: $readOnly)
+            ->addTool([$tools, 'linkTodoistTask'], 'link_todoist_task', description: 'Link an already created Todoist task to one JobRadar action item. This never changes an offer decision or application status.', annotations: $safeWrite)
+            ->addTool([$tools, 'completeActionItem'], 'complete_action_item', description: 'Mark one concrete action item completed. This never changes an offer decision or claims that an application was submitted.', annotations: $safeWrite)
+            ->addTool([$tools, 'listLinkedActionItems'], 'list_linked_action_items', description: 'Read linked Todoist actions needing status reconciliation. Completing an action never submits an application.', annotations: $readOnly)
+            ->addTool([$tools, 'acknowledgeTodoistStatus'], 'acknowledge_todoist_status', description: 'Acknowledge a verified Todoist status after reconciliation. Cancelled local actions must be closed in Todoist without deleting history.', annotations: $safeWrite)
+            ->addTool([$tools, 'recordApplicationEvent'], 'record_application_event', description: 'Record preparation, proven submission, received response or closure. Requires applications:write. Never sends anything. submitted requires an explicit approval reference, observed sending confirmation, actual timestamp and chosen follow-up date; a draft or checked Todoist task is not proof.', annotations: $safeWrite, inputSchema: self::applicationEventSchema())
             ->build();
     }
 
@@ -53,6 +59,15 @@ final class JobRadarMcpServerFactory
                 'prepareAccess' => ['type' => 'boolean', 'default' => false, 'description' => 'Open source access pages in Chrome and wait for explicit owner confirmation before checking offers.'],
             ],
         ];
+    }
+
+    /** @return array<string,mixed> */
+    private static function applicationEventSchema(): array
+    {
+        $schema = \App\Api\V1\RecordApplicationEventHandler::schema();
+        unset($schema['properties']['opportunity_id']);
+        $schema['required'] = array_values(array_diff($schema['required'], ['opportunity_id']));
+        return self::targetAndObjectSchema('event', $schema);
     }
 
     /**

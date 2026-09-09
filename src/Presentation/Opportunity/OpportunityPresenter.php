@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Presentation\Opportunity;
 
 use App\Assessment\AssessmentQueryService;
+use App\Action\ActionItemService;
 use App\Decision\OpportunityDecision;
 use App\Decision\OpportunityDecisionService;
 use App\Decision\DecisionQueryService;
@@ -25,6 +26,8 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly DecisionQueryService $decisionQueries,
         private readonly \App\Opportunity\ProjectCareService $projectCare,
         private readonly \App\Opportunity\CounterpartyService $counterparty,
+        private readonly ActionItemService $actionItems,
+        private readonly \App\Application\ApplicationWorkflowService $workflow,
     ) {
         parent::__construct();
     }
@@ -36,10 +39,15 @@ final class OpportunityPresenter extends SecuredPresenter
             $this->error('Nabídka nebyla nalezena.');
         }
         $this->opportunityId = $id;
+        $actionItems = $this->actionItems->listForOpportunity((int) $this->getUser()->getId(), $id);
         $this->template->setParameters([
             'opportunity' => $opportunity,
             'assessment' => $this->assessments->getCurrent($id),
             'decisionHistory' => $this->decisionQueries->history((int) $this->getUser()->getId(), $id),
+            'actionItems' => $actionItems,
+            'applicationHistory' => $this->workflow->history((int) $this->getUser()->getId(), $id),
+            'workflowLabels' => \App\Application\ApplicationWorkflowService::LABELS,
+            'openActionItemCount' => count(array_filter($actionItems, static fn (array $item): bool => $item['status'] === 'open')),
         ]);
 
         $form = $this->getComponent('decisionForm');
@@ -50,6 +58,134 @@ final class OpportunityPresenter extends SecuredPresenter
                 'note' => $opportunity->decisionState->note,
             ]);
         }
+    }
+
+    protected function createComponentActionItemForm(): Form
+    {
+        $form = new Form();
+        $form->addSelect('type', 'Typ kroku', ActionItemService::TYPES)->setRequired();
+        $form->addText('title', 'Konkrétní další krok')->setRequired()->setMaxLength(255);
+        $form->addTextArea('details', 'Podrobnosti')->setHtmlAttribute('rows', 2);
+        $form->addText('dueAt', 'Termín')->setHtmlType('datetime-local');
+        $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');
+        $form->addSubmit('send', 'Přidat navazující úkol');
+        $form->onSuccess[] = function (Form $form): void {
+            $values = (array) $form->getValues();
+            try {
+                $dueAt = null;
+                if (trim((string) ($values['dueAt'] ?? '')) !== '') {
+                    $local = \DateTimeImmutable::createFromFormat('Y-m-d\TH:i', (string) $values['dueAt'], new \DateTimeZone('Europe/Prague'));
+                    if (!$local instanceof \DateTimeImmutable) {
+                        throw new \InvalidArgumentException('Termín nemá platný formát.');
+                    }
+                    $dueAt = $local->setTimezone(new \DateTimeZone('UTC'));
+                }
+                $this->actionItems->create(
+                    (int) $this->getUser()->getId(),
+                    $this->opportunityId,
+                    (string) $values['type'],
+                    (string) $values['title'],
+                    (string) ($values['details'] ?? ''),
+                    $dueAt,
+                );
+            } catch (\InvalidArgumentException $exception) {
+                $form->addError($exception->getMessage());
+                return;
+            }
+            $this->flashMessage('Navazující úkol byl uložen v JobRadaru. Do Todoistu se přenese až samostatnou synchronizací.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
+    protected function createComponentApplicationForm(): Form
+    {
+        $userId = (int) $this->getUser()->getId();
+        $offer = $this->opportunities->getDetail($this->opportunityId, $userId);
+        if ($offer === null) { $this->error('Nabídka nenalezena.'); }
+        $form = new Form();
+        $form->addHidden('lockVersion', (string) $offer->decisionState->lockVersion);
+        $form->addHidden('idempotencyKey', bin2hex(random_bytes(16)));
+        $events = match ($offer->decisionState->workflowStatus) {
+            'none', 'preparing', 'awaiting_approval' => ['prepared' => 'Reakce je připravena ke schválení', 'submitted' => 'Reakce byla skutečně odeslána', 'closed' => 'Uzavřít jednání'],
+            'submitted', 'awaiting_response' => ['response_received' => 'Přišla odpověď', 'closed' => 'Uzavřít jednání'],
+            default => ['closed' => 'Uzavřít jednání'],
+        };
+        $form->addSelect('event', 'Co se stalo', $events)->setRequired();
+        $form->addTextArea('reference', 'Podklad nebo potvrzení')->setRequired()->setMaxLength(2000);
+        $zone = new \DateTimeZone('Europe/Prague');
+        $form->addText('occurredAt', 'Kdy se to stalo (Praha)')->setHtmlType('datetime-local')->setRequired()->setDefaultValue((new \DateTimeImmutable('now', $zone))->format('Y-m-d\TH:i'));
+        $form->addSelect('channel', 'Kanál odeslání', ['portal' => 'Pracovní portál', 'email' => 'E-mail', 'other' => 'Jiný kanál']);
+        $form->addText('approvalReference', 'Kde je výslovné schválení odeslání')->setMaxLength(2000);
+        $form->addCheckbox('confirmSent', 'Potvrzuji, že reakce byla se souhlasem skutečně odeslána a mám potvrzení odeslání.');
+        $form->addText('followUpAt', 'Kdy zkontrolovat odpověď (Praha)')->setHtmlType('datetime-local')->setDefaultValue((new \DateTimeImmutable('+7 days', $zone))->format('Y-m-d\TH:i'));
+        $options = [];
+        foreach ($this->actionItems->listForOpportunity($userId, $this->opportunityId) as $item) {
+            if ($item['status'] === 'open' && $item['action_type'] !== 'follow_up') { $options[(int) $item['id']] = (string) $item['title']; }
+        }
+        $form->addMultiSelect('completeIds', 'Přípravné úkoly dokončené odesláním', $options);
+        $form->addProtection();
+        $form->addSubmit('save', 'Uložit stav reakce');
+        $form->onSuccess[] = function (Form $form) use ($userId): void {
+            $v = (array) $form->getValues();
+            try {
+                $input = ['event' => (string) $v['event'], 'expected_lock_version' => (int) $v['lockVersion'], 'idempotency_key' => (string) $v['idempotencyKey'], 'reference' => (string) $v['reference'], 'occurred_at' => self::localTime((string) $v['occurredAt'])];
+                if ($v['event'] === 'submitted') {
+                    if (!$v['confirmSent']) { throw new \InvalidArgumentException('Potvrďte skutečné odeslání. Koncept nestačí.'); }
+                    $input += ['channel' => (string) $v['channel'], 'approval_reference' => (string) $v['approvalReference'], 'follow_up_at' => self::localTime((string) $v['followUpAt']), 'complete_action_item_ids' => array_map(intval(...), $v['completeIds'])];
+                }
+                $this->workflow->record($userId, $this->opportunityId, $input);
+            } catch (\InvalidArgumentException|OpportunityConflictException $e) {
+                $form->addError($e->getMessage()); return;
+            }
+            $this->flashMessage($v['event'] === 'submitted' ? 'Odeslání zaznamenáno. Nabídka čeká na odpověď; připomínka a dokončené úkoly se synchronizují do Todoistu.' : 'Stav reakce byl uložen.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
+    private static function localTime(string $value): string
+    {
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $value, new \DateTimeZone('Europe/Prague'));
+        if (!$date instanceof \DateTimeImmutable || $date->format('Y-m-d\TH:i') !== $value || \DateTimeImmutable::getLastErrors() !== false) { throw new \InvalidArgumentException('Vyplňte platné datum a čas.'); }
+        return $date->format(DATE_ATOM);
+    }
+
+    protected function createComponentActionItemStatusForm(): Form
+    {
+        $openItems = array_filter(
+            $this->actionItems->listForOpportunity((int) $this->getUser()->getId(), $this->opportunityId),
+            static fn (array $item): bool => $item['status'] === 'open',
+        );
+        $options = [];
+        foreach ($openItems as $item) {
+            $options[(int) $item['id']] = (string) $item['title'];
+        }
+        $form = new Form();
+        $form->addSelect('actionItemId', 'Otevřený úkol', $options)->setRequired();
+        $form->addProtection('Platnost formuláře vypršela. Zkuste to prosím znovu.');
+        $form->addSubmit('complete', 'Označit jako hotové');
+        $form->addSubmit('cancel', 'Zrušit úkol');
+        $form->onSuccess[] = function (Form $form): void {
+            $values = (array) $form->getValues();
+            $complete = $form['complete'];
+            if (!$complete instanceof SubmitButton) {
+                throw new \LogicException('Formulář navazujícího úkolu není správně sestaven.');
+            }
+            try {
+                if ($complete->isSubmittedBy()) {
+                    $this->actionItems->complete((int) $this->getUser()->getId(), (int) $values['actionItemId']);
+                } else {
+                    $this->actionItems->cancel((int) $this->getUser()->getId(), (int) $values['actionItemId']);
+                }
+            } catch (\InvalidArgumentException $exception) {
+                $form->addError($exception->getMessage());
+                return;
+            }
+            $this->flashMessage('Stav navazujícího úkolu byl uložen. Rozhodnutí ani stav žádosti se nezměnily.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
     }
 
     protected function createComponentProjectCareForm(): Form

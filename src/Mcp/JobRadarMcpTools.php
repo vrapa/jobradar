@@ -62,7 +62,8 @@ final class JobRadarMcpTools
         }
         $items = array_values(array_filter(
             $data,
-            static fn (mixed $item): bool => is_array($item) && ($item['decision'] ?? null) === 'react',
+            static fn (mixed $item): bool => is_array($item) && ($item['decision'] ?? null) === 'react'
+                && in_array($item['workflow_status'] ?? 'none', ['none', 'preparing', 'awaiting_approval'], true),
         ));
         return self::result(['data' => $items, 'meta' => ['count' => count($items)]]);
     }
@@ -109,6 +110,42 @@ final class JobRadarMcpTools
             sprintf('/decision-delegations/%d/decisions', $delegationId),
             $batch,
         ));
+    }
+
+    public function listPendingActionItems(): CallToolResult
+    {
+        return self::result($this->api->get('/action-items'));
+    }
+
+    public function linkTodoistTask(int $actionItemId, string $externalId, ?string $externalUrl = null): CallToolResult
+    {
+        return self::result($this->api->post('/action-items/external-task', [
+            'action_item_id' => $actionItemId,
+            'provider' => 'todoist',
+            'external_id' => $externalId,
+            'external_url' => $externalUrl,
+        ]));
+    }
+
+    public function completeActionItem(int $actionItemId): CallToolResult
+    {
+        return self::result($this->api->post('/action-items/complete', ['action_item_id' => $actionItemId]));
+    }
+
+    /** @param array<string,mixed> $event */
+    public function recordApplicationEvent(int $opportunityId, array $event): CallToolResult
+    {
+        return self::result($this->api->post('/applications/events', [...$event, 'opportunity_id' => $opportunityId]));
+    }
+
+    public function listLinkedActionItems(): CallToolResult
+    {
+        return self::result($this->api->get('/action-items/linked'));
+    }
+
+    public function acknowledgeTodoistStatus(int $actionItemId, string $status): CallToolResult
+    {
+        return self::result($this->api->post('/action-items/synced', ['action_item_id' => $actionItemId, 'status' => $status]));
     }
 
     /** @param array<string, mixed> $payload */

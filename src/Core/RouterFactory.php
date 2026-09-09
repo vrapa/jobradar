@@ -79,6 +79,7 @@ final class RouterFactory
         $router->addRoute('kontroly/<id \d+>', 'SearchRequest:detail');
         $router->addRoute('nabidky/pridat', 'OpportunityImport:default');
         $router->addRoute('nabidky/k-reakci', 'Home:reactionQueue');
+        $router->addRoute('nabidky/cekame-na-odpoved', 'Home:awaitingResponse');
         $router->addRoute('nabidky/nezajimave', 'Home:uninteresting');
         $router->addRoute('nabidky/<id \d+>/podminky', 'OpportunityTerms:default');
         $router->addRoute('nabidky/<id \d+>', 'Opportunity:detail');
