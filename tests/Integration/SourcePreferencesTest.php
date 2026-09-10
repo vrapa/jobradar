@@ -38,6 +38,9 @@ final class SourcePreferencesTest extends TestCase
         $this->user = (int) $this->db->getInsertId();
         $this->db->query('INSERT INTO sources', ['name' => 'Preference test ' . $unique, 'url' => 'https://example.test/' . $unique, 'source_type' => 'browser', 'priority' => 'A', 'active' => true, 'created_at' => $now, 'updated_at' => $now]);
         $this->source = (int) $this->db->getInsertId();
+        $this->db->query('INSERT INTO sources', ['name' => 'Synthetic manual ' . $unique, 'url' => 'https://example.test/search/' . $unique, 'source_type' => 'manual_search', 'priority' => 'B', 'active' => true, 'created_at' => $now, 'updated_at' => $now]);
+        $manual = (int) $this->db->getInsertId();
+        $this->db->query('INSERT INTO source_search_definitions', ['source_id' => $manual, 'name' => 'Synthetic query', 'version' => 1, 'query_text' => 'example maintenance', 'active' => true, 'created_at' => $now]);
     }
 
     private function withinTransaction(callable $test): void

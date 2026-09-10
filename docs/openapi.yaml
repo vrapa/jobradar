@@ -1,0 +1,1022 @@
+openapi: 3.1.0
+info:
+  title: JobRadar private API
+  version: 1.0.0
+  description: Versioned API for local runners, MCP clients, and explicitly authorized integrations.
+servers:
+  - url: /api/v1
+paths:
+  /applications/events:
+    post:
+      operationId: recordApplicationEvent
+      summary: Record preparation, proven approved submission, received response or closure; never sends anything
+      description: Requires applications:write. Uses decision_state.lock_version, owner-scoped idempotency and atomic history/task changes. Submission requires channel, approval_reference, confirmation reference, actual occurred_at and a chosen follow_up_at later than submission. Prepared is not sent. Replay with identical payload returns the original result.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [opportunity_id, event, expected_lock_version, idempotency_key, reference, occurred_at]
+              properties:
+                opportunity_id: { type: integer, minimum: 1 }
+                event: { type: string, enum: [prepared, submitted, response_received, closed] }
+                expected_lock_version: { type: integer, minimum: 1 }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+                reference: { type: string, minLength: 1, maxLength: 2000 }
+                occurred_at: { type: string, format: date-time }
+                channel: { type: string, enum: [portal, email, other] }
+                approval_reference: { type: string, minLength: 1, maxLength: 2000 }
+                follow_up_at: { type: string, format: date-time }
+                complete_action_item_ids:
+                  type: array
+                  maxItems: 100
+                  items: { type: integer, minimum: 1 }
+              allOf:
+                - if:
+                    properties:
+                      event: { const: submitted }
+                  then:
+                    required: [channel, approval_reference, follow_up_at]
+      responses:
+        '200': { description: Recorded event with workflow_status, lock_version, follow_up_action_item_id and sent_by_this_operation=false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Stale state version or conflicting idempotency key }
+        '422': { description: Missing evidence, invalid timestamp, foreign action or forbidden transition }
+  /action-items/linked:
+    get:
+      operationId: listLinkedActionItems
+      summary: List linked open actions and terminal actions awaiting Todoist acknowledgement
+      description: Requires action_items:read. Returns only token owner's items, external_id, external_url, local status and synced_status. Does not change application state.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Data array and meta.count }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /action-items/synced:
+    post:
+      operationId: acknowledgeTodoistStatus
+      summary: Acknowledge verified external task status without changing the action or application
+      description: Requires action_items:write; requested status must match the current owned linked action.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action_item_id, status]
+              properties:
+                action_item_id: { type: integer, minimum: 1 }
+                status: { type: string, enum: [open, completed, cancelled] }
+      responses:
+        '200': { description: Acknowledged }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { description: Status conflict or missing owned external link }
+  /sources:
+    get:
+      operationId: listSources
+      summary: List active sources available for an explicit manual check
+      tags: [sources]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active non-manual sources and their latest access state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Source'
+                  meta:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: { type: integer, minimum: 0 }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /sources/requiring-login:
+    get:
+      operationId: listSourcesRequiringLogin
+      summary: List active sources whose verified state requires user intervention
+      tags: [sources]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sources requiring login or another explicit user intervention
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Source' }
+                  meta:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /search-requests:
+    post:
+      operationId: createSearchRequest
+      summary: Explicitly request a manual source check
+      tags: [search]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source_ids, idempotency_key]
+              properties:
+                source_ids:
+                  type: array
+                  minItems: 1
+                  items: { type: integer, minimum: 1 }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+                prepare_access: { type: boolean, default: false, description: Prepare browser access and wait for owner confirmation before traversing offers. }
+      responses:
+        '201': { $ref: '#/components/responses/SearchRequestAccepted' }
+        '200': { $ref: '#/components/responses/SearchRequestAccepted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /opportunities:
+    get:
+      operationId: listOpportunities
+      summary: List current opportunities with the token owner's decision state
+      tags: [opportunities]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current non-archived opportunities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/OpportunitySummary' }
+                  meta:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /opportunities/import:
+    post:
+      operationId: importOpportunity
+      summary: Import one untrusted opportunity through the canonical domain service
+      tags: [opportunities]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpportunityImport' }
+      responses:
+        '201': { $ref: '#/components/responses/OpportunityImported' }
+        '200': { $ref: '#/components/responses/OpportunityImported' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /opportunities/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      operationId: getOpportunity
+      summary: Get one opportunity with versions and the token owner's decision state
+      tags: [opportunities]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Opportunity detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/OpportunityDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /opportunities/{id}/decision:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    put:
+      operationId: setOpportunityDecision
+      summary: Apply a reversible decision under an exact single-opportunity delegation
+      tags: [decisions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [delegation_id, expected_lock_version, decision, idempotency_key]
+              properties:
+                delegation_id: { type: integer, minimum: 1 }
+                expected_lock_version: { type: integer, minimum: 0 }
+                decision: { type: string, enum: [undecided, react, uninteresting] }
+                reason: { type: [string, 'null'] }
+                note: { type: [string, 'null'] }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+      responses:
+        '200':
+          description: Decision result; no application is submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [opportunity_id, delegation_id, previous_decision, decision, lock_version, changed, application_submitted]
+                    properties:
+                      opportunity_id: { type: integer, minimum: 1 }
+                      delegation_id: { type: integer, minimum: 1 }
+                      previous_decision: { type: string, enum: [undecided, react, uninteresting] }
+                      decision: { type: string, enum: [undecided, react, uninteresting] }
+                      lock_version: { type: integer, minimum: 1 }
+                      changed: { type: boolean }
+                      application_submitted: { type: boolean, const: false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /decision-delegations:
+    post:
+      operationId: createDecisionDelegation
+      summary: Explicitly authorize one time-limited batch over an exact assessed opportunity set
+      description: Requires the separate decisions:delegate scope; ordinary decision writers cannot grant themselves a delegation.
+      tags: [decisions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [opportunity_ids, candidate_profile_id, scoring_rule_set_id, expires_at, idempotency_key]
+              properties:
+                opportunity_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  uniqueItems: true
+                  items: { type: integer, minimum: 1 }
+                candidate_profile_id: { type: integer, minimum: 1 }
+                scoring_rule_set_id: { type: integer, minimum: 1 }
+                expires_at: { type: string, format: date-time }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+      responses:
+        '201':
+          description: Active delegation; no application is submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [id, opportunity_ids, expires_at, status, application_submitted]
+                    properties:
+                      id: { type: integer, minimum: 1 }
+                      opportunity_ids:
+                        type: array
+                        items: { type: integer, minimum: 1 }
+                      expires_at: { type: string, format: date-time }
+                      status: { type: string, const: active }
+                      application_submitted: { type: boolean, const: false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /decision-delegations/{id}/decisions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      operationId: applyDecisionDelegation
+      summary: Atomically apply the exact authorized decision batch with optimistic locks
+      tags: [decisions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decisions, idempotency_key]
+              properties:
+                decisions:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: { $ref: '#/components/schemas/DecisionBatchItem' }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+      responses:
+        '200':
+          description: Completed atomic batch; no application is submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [delegation_id, processed, changed, status, application_submitted]
+                    properties:
+                      delegation_id: { type: integer, minimum: 1 }
+                      processed: { type: integer, minimum: 1 }
+                      changed: { type: integer, minimum: 0 }
+                      status: { type: string, const: completed }
+                      application_submitted: { type: boolean, const: false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /opportunities/{id}/assessments:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      operationId: saveOpportunityAssessment
+      summary: Save an explainable assistant assessment without changing the user's decision
+      tags: [assessments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssessmentInput' }
+      responses:
+        '201':
+          description: Assessment and separate recommendation saved; no application submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [opportunity_id, assessment_id, recommendation_id, opportunity_lock_version, decision_changed, application_submitted]
+                    properties:
+                      opportunity_id: { type: integer, minimum: 1 }
+                      assessment_id: { type: integer, minimum: 1 }
+                      recommendation_id: { type: integer, minimum: 1 }
+                      opportunity_lock_version: { type: integer, minimum: 1 }
+                      decision_changed: { type: boolean, const: false }
+                      application_submitted: { type: boolean, const: false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /search-requests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SearchRequestId'
+    get:
+      operationId: getSearchRequest
+      summary: Get an owned search request and its verified coverage
+      tags: [search]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Search request detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SearchRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /search-requests/{id}/resume:
+    parameters:
+      - $ref: '#/components/parameters/SearchRequestId'
+    post:
+      operationId: resumeSearchRequest
+      summary: Explicitly request a new login check after user intervention
+      tags: [search]
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/SearchRequestState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+  /search-requests/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/SearchRequestId'
+    post:
+      operationId: cancelSearchRequest
+      summary: Cancel remaining work while preserving recorded results
+      tags: [search]
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/SearchRequestState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+  /runner/lease:
+    post:
+      operationId: claimRunnerLease
+      summary: Claim the oldest explicitly requested search job
+      tags: [runner]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: A new short-lived lease, or null when the queue is empty
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/RunnerLease'
+                      - type: 'null'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/RunnerUnavailable' }
+  /runner/lease/renew:
+    post:
+      operationId: renewRunnerLease
+      summary: Extend an active lease before it expires
+      tags: [runner]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_id, lease_token]
+              properties:
+                request_id: { type: integer, minimum: 1 }
+                lease_token: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200':
+          description: Renewed lease expiration
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [request_id, lease_expires_at]
+                    properties:
+                      request_id: { type: integer, minimum: 1 }
+                      lease_expires_at: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+  /search-runs/{id}/sources/{sourceId}/progress:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+      - name: sourceId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      operationId: recordSourceProgress
+      summary: Start or finish a source traversal under an active runner lease
+      tags: [runner]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/StartSourceProgress'
+                - $ref: '#/components/schemas/FinishSourceProgress'
+      responses:
+        '200':
+          description: Progress event accepted
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /action-items:
+    get:
+      operationId: listPendingActionItems
+      summary: List open concrete next actions not yet linked to Todoist
+      tags: [action-items]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pending action items owned by the token owner
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ActionItem' }
+                  meta:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /action-items/external-task:
+    post:
+      operationId: linkExternalTask
+      summary: Link an already created Todoist task to one JobRadar action item
+      tags: [action-items]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action_item_id, provider, external_id]
+              properties:
+                action_item_id: { type: integer, minimum: 1 }
+                provider: { type: string, enum: [todoist] }
+                external_id: { type: string, minLength: 1, maxLength: 255 }
+                external_url: { type: [string, 'null'], format: uri, maxLength: 2048 }
+      responses:
+        '200': { description: External task linked idempotently }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /action-items/complete:
+    post:
+      operationId: completeActionItem
+      summary: Complete one concrete action without changing decision or application state
+      tags: [action-items]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action_item_id]
+              properties:
+                action_item_id: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Action item completed; decision_changed and application_submitted are always false
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JobRadar token with the scope required by each operation
+  responses:
+    Unauthorized:
+      description: Missing, expired, revoked, or insufficiently scoped token
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status, message]
+            properties:
+              status: { type: string, const: error }
+              message: { type: string }
+    InvalidRequest:
+      description: Invalid request data
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Resource does not exist or is not owned by the token owner
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InvalidTransition:
+      description: Requested state transition is not allowed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    RunnerUnavailable:
+      description: Token is not linked to an active runner device
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    SearchRequestAccepted:
+      description: Search request created or an idempotent existing result returned
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/SearchRequestStateData' }
+    SearchRequestState:
+      description: Current state after a control operation
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/SearchRequestStateData' }
+    OpportunityImported:
+      description: Opportunity and source-version identifiers with idempotency outcome
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: object
+                required: [opportunity_id, source_version_id, opportunity_created, version_created]
+                properties:
+                  opportunity_id: { type: integer, minimum: 1 }
+                  source_version_id: { type: integer, minimum: 1 }
+                  opportunity_created: { type: boolean }
+                  version_created: { type: boolean }
+  parameters:
+    SearchRequestId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+  schemas:
+    ActionItem:
+      type: object
+      required: [id, user_id, opportunity_id, action_type, title, status, origin, created_at, updated_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        user_id: { type: integer, minimum: 1 }
+        opportunity_id: { type: [integer, 'null'], minimum: 1 }
+        action_type: { type: string, enum: [verify_terms, review_application, reply, follow_up, login, other] }
+        title: { type: string, minLength: 1, maxLength: 255 }
+        details: { type: [string, 'null'] }
+        due_at: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [open, completed, cancelled] }
+        origin: { type: string, enum: [user, assistant, system] }
+        external_id: { type: [string, 'null'] }
+        external_url: { type: [string, 'null'], format: uri }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DecisionBatchItem:
+      type: object
+      additionalProperties: false
+      required: [opportunity_id, expected_lock_version, decision]
+      properties:
+        opportunity_id: { type: integer, minimum: 1 }
+        expected_lock_version: { type: integer, minimum: 0 }
+        decision: { type: string, enum: [undecided, react, uninteresting] }
+        reason: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+    OpportunityImport:
+      type: object
+      additionalProperties: false
+      required: [url, originalTitle, originalText]
+      properties:
+        url: { type: string, format: uri }
+        originalTitle: { type: string, minLength: 1, maxLength: 500 }
+        originalText: { type: string, minLength: 1 }
+        companyName: { type: [string, 'null'], maxLength: 255 }
+        translatedTitle: { type: [string, 'null'], maxLength: 500 }
+        translatedText: { type: [string, 'null'] }
+        summary: { type: [string, 'null'], maxLength: 65535 }
+        sourceLanguage: { type: [string, 'null'], maxLength: 16 }
+        incomplete: { type: boolean, default: false }
+        discoveryDefinitionId: { type: [integer, 'null'], minimum: 1, description: Existing manual-search definition; executor context must match assigned source. }
+        counterparty:
+          $ref: '#/components/schemas/CounterpartyInput'
+        projectCare:
+          type: [object, 'null']
+          required: [value]
+          additionalProperties: false
+          description: Omit to retain classification; explicit null value records unknown. Known value requires reason, confidence and verifiedAt.
+          properties:
+            value: { type: [boolean, 'null'] }
+            reason: { type: [string, 'null'] }
+            confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+            verifiedAt: { type: [string, 'null'], format: date-time }
+    CounterpartyInput:
+      type: [object, 'null']
+      additionalProperties: false
+      required: [value]
+      description: Independent evidence-based counterparty role. Omission retains history; explicit null value records unknown. Known roles require reason, confidence and verifiedAt.
+      properties:
+        value: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
+        reason: { type: [string, 'null'] }
+        confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+    AssessmentInput:
+      type: object
+      additionalProperties: false
+      required: [expectedLockVersion, candidateProfileId, scoringRuleSetId, recommendation, coverage, confidence, summary, modelIdentifier, idempotencyKey]
+      properties:
+        expectedLockVersion: { type: integer, minimum: 1 }
+        candidateProfileId: { type: integer, minimum: 1 }
+        scoringRuleSetId: { type: integer, minimum: 1 }
+        recommendation: { type: string, enum: [react, uninteresting, verify] }
+        coverage: { type: string, pattern: '^(?:0(?:\.\d{1,3})?|1(?:\.0{1,3})?)$' }
+        confidence: { type: string, pattern: '^(?:0(?:\.\d{1,3})?|1(?:\.0{1,3})?)$' }
+        summary: { type: string, minLength: 1 }
+        scoreMin: { type: [string, 'null'] }
+        scoreMax: { type: [string, 'null'] }
+        verifiedPoints: { type: [string, 'null'] }
+        modelIdentifier: { type: string, minLength: 1 }
+        breakdowns:
+          type: array
+          items: { type: object }
+        findings:
+          type: array
+          items: { type: object }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 200 }
+    OpportunitySummary:
+      type: object
+      required: [id, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, rate, workload, assessment]
+      properties:
+        id: { type: integer, minimum: 1 }
+        title: { type: string }
+        company_name: { type: [string, 'null'] }
+        summary: { type: [string, 'null'] }
+        validity_status: { type: string }
+        incomplete: { type: boolean }
+        found_at: { type: string, format: date-time }
+        decision: { type: string, enum: [undecided, react, uninteresting] }
+        workflow_status: { type: string }
+        project_care: { type: [boolean, 'null'], description: 'Převzetí či péče o existující aplikaci; null znamená neověřeno.' }
+        counterparty: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
+        rate:
+          type: object
+          required: [min, max, currency, unit]
+          properties:
+            min: { type: [string, 'null'] }
+            max: { type: [string, 'null'] }
+            currency: { type: [string, 'null'] }
+            unit: { type: [string, 'null'] }
+        workload:
+          type: object
+          required: [min, max, unit]
+          properties:
+            min: { type: [string, 'null'] }
+            max: { type: [string, 'null'] }
+            unit: { type: [string, 'null'] }
+        assessment:
+          type: object
+          required: [score_min, score_max, coverage_percent, recommendation]
+          properties:
+            score_min: { type: [string, 'null'] }
+            score_max: { type: [string, 'null'] }
+            coverage_percent: { type: [integer, 'null'], minimum: 0, maximum: 100 }
+            recommendation: { type: [string, 'null'], enum: [react, uninteresting, verify, null] }
+    OpportunityDetail:
+      allOf:
+        - $ref: '#/components/schemas/OpportunitySummary'
+        - type: object
+          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, terms, technologies, versions, decision_state, current_assessment]
+          properties:
+            original_title: { type: string }
+            translated_title: { type: [string, 'null'] }
+            original_text: { type: string, description: Untrusted external content }
+            translated_text: { type: [string, 'null'], description: Untrusted external content }
+            canonical_url: { type: string, format: uri }
+            source_language: { type: [string, 'null'] }
+            acquired_at: { type: string, format: date-time }
+            version_count: { type: integer, minimum: 1 }
+            lock_version: { type: integer, minimum: 1 }
+            project_care_history:
+              type: array
+              description: Nejnovější klasifikace první; vynechaný příznak při importu historii nemění.
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  source_version_id: { type: integer }
+                  value: { type: [boolean, 'null'] }
+                  reason: { type: [string, 'null'] }
+                  confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+                  verified_at: { type: [string, 'null'], format: date-time }
+                  created_at: { type: string, format: date-time }
+            counterparty_history:
+              type: array
+              description: Append-only classifications, newest first; each references the concrete offer version used as evidence.
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  source_version_id: { type: integer }
+                  value: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
+                  reason: { type: [string, 'null'] }
+                  confidence: { type: [number, 'null'] }
+                  verified_at: { type: [string, 'null'], format: date-time }
+                  created_at: { type: string, format: date-time }
+            discoveries:
+              type: array
+              items:
+                type: object
+                properties:
+                  search_definition_id: { type: integer }
+                  source_name: { type: string }
+                  query_text: { type: string }
+                  discovered_at: { type: string, format: date-time }
+            terms: { type: [object, 'null'] }
+            technologies:
+              type: array
+              items: { type: object }
+            versions:
+              type: array
+              items: { type: object }
+            decision_state:
+              type: object
+              required: [decision, reason, note, workflow_status, lock_version]
+              properties:
+                decision: { type: string, enum: [undecided, react, uninteresting] }
+                reason: { type: [string, 'null'] }
+                note: { type: [string, 'null'] }
+                workflow_status: { type: string }
+                lock_version: { type: integer, minimum: 0 }
+            current_assessment:
+              oneOf:
+                - $ref: '#/components/schemas/Assessment'
+                - type: 'null'
+    Assessment:
+      type: object
+      required: [id, recommendation, coverage, confidence, summary, score_min, score_max, verified_points, profile, rule_set, author_type, model_identifier, created_at, breakdowns, findings]
+      properties:
+        id: { type: integer, minimum: 1 }
+        recommendation: { type: string, enum: [react, uninteresting, verify] }
+        coverage: { type: string }
+        confidence: { type: string }
+        summary: { type: string }
+        score_min: { type: [string, 'null'] }
+        score_max: { type: [string, 'null'] }
+        verified_points: { type: [string, 'null'] }
+        profile: { type: object }
+        rule_set: { type: object }
+        author_type: { type: string }
+        model_identifier: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        breakdowns:
+          type: array
+          items: { type: object }
+        findings:
+          type: array
+          items: { type: object }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    SearchRequestStateData:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: integer, minimum: 1 }
+        status: { type: string }
+        created: { type: boolean }
+    SearchRequest:
+      type: object
+      required: [id, status, requested_at, completed_at, cancelled_at, run, coverage, sources]
+      properties:
+        search_plans:
+          type: array
+          description: Owner-scoped pinned definitions and ordered steps with shared budget and recovery state; see docs/direct-takeover.md.
+          items: { type: object }
+        id: { type: integer, minimum: 1 }
+        status: { type: string }
+        requested_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        run: { type: [object, 'null'] }
+        coverage:
+          type: object
+          required: [planned_sources, completely_checked_sources]
+          properties:
+            planned_sources: { type: integer, minimum: 1 }
+            completely_checked_sources: { type: integer, minimum: 0 }
+        sources:
+          type: array
+          items: { type: object }
+    RunnerLease:
+      type: object
+      required: [request_id, run_id, lease_token, lease_expires_at, source_ids]
+      properties:
+        request_id: { type: integer, minimum: 1 }
+        run_id: { type: integer, minimum: 1 }
+        lease_token: { type: string, pattern: '^[a-f0-9]{64}$' }
+        lease_expires_at: { type: string, format: date-time }
+        source_ids:
+          type: array
+          minItems: 1
+          items: { type: integer, minimum: 1 }
+    StartSourceProgress:
+      type: object
+      additionalProperties: false
+      required: [event, lease_token, scope]
+      properties:
+        event: { type: string, const: start }
+        lease_token: { type: string, pattern: '^[a-f0-9]{64}$' }
+        scope:
+          type: object
+          additionalProperties: false
+          required: [description]
+          properties:
+            description: { type: string, minLength: 1 }
+            filters: { type: [object, array] }
+            horizon_from: { type: [string, 'null'], format: date-time }
+            horizon_to: { type: [string, 'null'], format: date-time }
+    FinishSourceProgress:
+      type: object
+      additionalProperties: false
+      required: [event, lease_token, result]
+      properties:
+        event: { type: string, const: finish }
+        lease_token: { type: string, pattern: '^[a-f0-9]{64}$' }
+        result:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { type: string, enum: [complete, partial, waiting_for_login, error, cancelled] }
+            pages_traversed: { type: [integer, 'null'], minimum: 0 }
+            displayed_count: { type: [integer, 'null'], minimum: 0 }
+            detail_opened_count: { type: [integer, 'null'], minimum: 0 }
+            stored_count: { type: [integer, 'null'], minimum: 0 }
+            updated_count: { type: [integer, 'null'], minimum: 0 }
+            duplicate_count: { type: [integer, 'null'], minimum: 0 }
+            rejected_count: { type: [integer, 'null'], minimum: 0 }
+            incomplete_reason: { type: [string, 'null'] }
+            error_code: { type: [string, 'null'] }
+    Source:
+      type: object
+      required: [id, name, url, market_code, type, priority, recommended_frequency_hours, access, last_attempt_at, last_success_at, last_found_at, stale]
+      properties:
+        id: { type: integer, minimum: 1 }
+        name: { type: string }
+        url: { type: string, format: uri }
+        market_code: { type: [string, 'null'] }
+        type: { type: string }
+        priority: { type: string }
+        recommended_frequency_hours: { type: [integer, 'null'], minimum: 1 }
+        access:
+          type: object
+          required: [status, verified_at, intervention_required, login_url]
+          properties:
+            status: { type: string, enum: [unknown, available, login_required, blocked, error] }
+            verified_at: { type: [string, 'null'], format: date-time }
+            intervention_required: { type: boolean }
+            login_url: { type: [string, 'null'], format: uri }
+        last_attempt_at: { type: [string, 'null'], format: date-time }
+        last_success_at: { type: [string, 'null'], format: date-time }
+        last_found_at: { type: [string, 'null'], format: date-time }
+        stale: { type: boolean }

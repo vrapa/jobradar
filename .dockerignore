@@ -8,3 +8,12 @@
 node_modules
 var
 vendor
+
+private
+**/*.private.*
+**/*.local.json
+**/*.bundle
+**/*.sql.gz
+**/*.p12
+**/*.pfx
+auth.json

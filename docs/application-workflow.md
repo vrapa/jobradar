@@ -1,0 +1,18 @@
+# Reakce a čekání na odpověď
+
+1. Uživatel označí nabídku Reagovat a podle potřeby přidá navazující úkol přípravy.
+2. V soukromém projektu načti detail JobRadaru včetně `decision_state.lock_version`, `action_items` a `application_history`. Zkontroluj, zda už nebylo odesláno. Připrav soubory; po dokončení návrhu zaznamenej `prepared` s odkazem na konkrétní finální soubor a skutečným časem. Stav je Připraveno ke schválení.
+3. Ukaž uživateli konečný obsah, přílohy, cíl a použité údaje. Odeslání vyžaduje konkrétní souhlas. Při přípravě navrhni i datum následné kontroly odpovědi, obvykle 7 dní po odeslání; u sjednaného termínu použij tento termín. Zvolený termín musí být uživateli známý před jeho zapsáním.
+4. Po skutečném odeslání a ověření potvrzení portálu nebo odeslaného e-mailu načti aktuální verzi stavu a zavolej `record_application_event` přes klienta se scope `applications:write`. V `event` uveď `submitted`, `expected_lock_version`, stabilní `idempotency_key`, `reference` s konkrétním potvrzením, `occurred_at` s časovým pásmem, `channel` (portal/email/other), `approval_reference`, `follow_up_at` a explicitní `complete_action_item_ids` hotových přípravných kroků. Nezapisuj telefon, přihlašovací údaje ani celé zprávy. Ztracenou odpověď opakuj se stejným klíčem a stejným obsahem; neodesílej znovu žádost.
+5. JobRadar přesune nabídku z K reakci do Čekáme na odpověď, zachová rozhodnutí i historii, dokončí vybrané úkoly a vytvoří jeden follow-up. Automatizace přenese follow-up do Todoist sekce Čekáme na odpověď a uzavře propojené dokončené úkoly. Soukromou historickou účtenku v soukromém úložišti aktualizuj podle tamních pravidel.
+6. Po ověřené odpovědi zaznamenej `response_received` s odkazem na přijatou zprávu, skutečným časem, aktuální verzí a novým idempotency klíčem. Ukončí vlastní připomínku čekání. Další konkrétní úkol založ podle obsahu odpovědi. `closed` s důvodem uzavírá jednání; nesmaže nabídku ani historii.
+
+Připravený text, schválení samotné nebo hotový Todoist úkol nejsou dokladem odeslání. Záznamový nástroj nic neposílá a neověřuje sám externí poštu; odpovědnost za doložení je na volajícím, reference zůstane auditovaná. Události nevznikají jen uložením libovolného souboru na disk.
+
+## Připojení soukromého projektu
+
+`executor/install-actions.ps1 -OwnerId <ověřený vlastník> -Applications` vydá oddělený odvolatelný klient `jobradar-applications` se scopes `applications:write`, `opportunities:read`, `action_items:read`. Používá stejný verzovaný HTTP transport a samostatný DPAPI soubor `application-workflow-token.xml`. Nikdy nerozšiřuje scopes vykonavatele ani synchronizačního klienta. Hostitel musí nové MCP načíst; registrace sama není důkaz dostupnosti nástroje. Při nedostupnosti záznamového nástroje použij formulář na detailu nabídky a oznam neuložený stav, nikdy nepředstírej úspěch.
+
+## Pravidla synchronizace stavů
+
+Po vytváření nových úkolů načti `list_linked_action_items`. Každý úkol ověř v Todoistu podle přesného externího ID a markeru `JobRadar action_item:<id>` v popisu. Hotový Todoist úkol a otevřený JobRadar krok: zavolej `complete_action_item`, potom `acknowledge_todoist_status(completed)`. Dokončený nebo zrušený JobRadar krok: pokud je Todoist úkol otevřený, označ ho hotový (nemaž); po ověření potvrď místní stav pomocí `acknowledge_todoist_status`. Ručně znovu otevřený již synchronizovaný úkol nepřepisuj automaticky. Chybějící úkol, odlišný marker nebo změna vazby znamená konflikt k řešení, nikoli pokyn vytvořit kopii. Samotné odškrtnutí follow-upu nemění čekání nabídky na odpověď.
