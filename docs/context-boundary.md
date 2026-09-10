@@ -52,3 +52,5 @@ Aktivujte lokální hooky příkazem `git config core.hooksPath .githooks` (vyž
 Kontrola zachytává zakázané soukromé soubory a rozpoznané formáty tajemství. Nedokáže určit, zda obecně vypadající text popisuje skutečný život člověka. Každý diff proto vyžaduje významovou kontrolu, včetně dotazů, priorit, dostupnosti, sazeb, reálných ID a účtů. Výjimky musí být skutečně syntetické, nikoli skryté v allowlistu.
 
 Po přepsání historie založte další pracovní kopie novým klonem. Staré větve se nesmějí mergovat ani znovu pushovat. Původní záloha zůstává soukromým archivem; patří mimo webroot a Docker build context s omezeným přístupem. Viditelnost repozitáře se nemění automaticky.
+
+Pre-push kontroluje skutečně odesílané SHA včetně přímého push commitu. Soubor `.privacy-history-root` připíná schválený čistý kořen; historie se starým nebo cizím kořenem se odmítne. Změna této kotvy vyžaduje nový audit historie.

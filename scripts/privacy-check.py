@@ -54,9 +54,29 @@ def main():
     mode.add_argument("--staged", action="store_true")
     mode.add_argument("--history", action="store_true")
     mode.add_argument("--working", action="store_true")
+    mode.add_argument("--pre-push", action="store_true")
     args = parser.parse_args()
     failures = set()
     checked = 0
+    revisions = ["--branches", "--tags", "--remotes"]
+    if args.pre_push:
+        revisions = []
+        for line in sys.stdin:
+            fields = line.split()
+            if len(fields) != 4 or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[1]):
+                raise RuntimeError("Invalid pre-push input")
+            if set(fields[1]) != {"0"}:
+                revisions.append(fields[1])
+        if not revisions:
+            return 0
+    if args.history or args.pre_push:
+        anchor = pathlib.Path(".privacy-history-root")
+        if anchor.is_file():
+            allowed = anchor.read_text().strip()
+            roots = git("rev-list", "--max-parents=0", *revisions).decode().splitlines()
+            if any(root != allowed for root in roots):
+                print("History contains an unapproved root. Re-clone; do not merge old history.")
+                return 1
     if args.working:
         for path in git("ls-files", "-z", "--cached", "--others", "--exclude-standard").decode().split("\0"):
             if not path or not pathlib.Path(path).is_file():
@@ -64,8 +84,8 @@ def main():
             checked += 1
             failures.update((path, rule) for rule in scan(path, pathlib.Path(path).read_bytes()))
     else:
-        if args.history:
-            entries = [line.split(" ", 1) for line in git("rev-list", "--objects", "--branches", "--tags", "--remotes").decode().splitlines()]
+        if args.history or args.pre_push:
+            entries = [line.split(" ", 1) for line in git("rev-list", "--objects", *revisions).decode().splitlines()]
         else:
             entries = []
             for record in git("ls-files", "--stage", "-z").decode().split("\0"):
