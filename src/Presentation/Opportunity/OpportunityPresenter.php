@@ -27,6 +27,7 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly \App\Opportunity\ProjectCareService $projectCare,
         private readonly \App\Opportunity\CounterpartyService $counterparty,
         private readonly ActionItemService $actionItems,
+        private readonly \App\Opportunity\AttachmentReviewService $attachments,
         private readonly \App\Application\ApplicationWorkflowService $workflow,
     ) {
         parent::__construct();
@@ -45,6 +46,7 @@ final class OpportunityPresenter extends SecuredPresenter
             'assessment' => $this->assessments->getCurrent($id),
             'decisionHistory' => $this->decisionQueries->history((int) $this->getUser()->getId(), $id),
             'actionItems' => $actionItems,
+            'attachmentReviews' => $this->attachments->listForOpportunity((int) $this->getUser()->getId(), $id),
             'applicationHistory' => $this->workflow->history((int) $this->getUser()->getId(), $id),
             'workflowLabels' => \App\Application\ApplicationWorkflowService::LABELS,
             'openActionItemCount' => count(array_filter($actionItems, static fn (array $item): bool => $item['status'] === 'open')),
@@ -58,6 +60,42 @@ final class OpportunityPresenter extends SecuredPresenter
                 'note' => $opportunity->decisionState->note,
             ]);
         }
+    }
+
+    protected function createComponentAttachmentForm(): Form
+    {
+        $form = new Form();
+        $options = [];
+        foreach ($this->attachments->listForOpportunity((int) $this->getUser()->getId(), $this->opportunityId) as $item) {
+            $options[$item['id'] . ':' . $item['revision']] = $item['name'];
+        }
+        $form->addSelect('key', 'Příloha', $options)->setRequired();
+        $form->addSelect('status', 'Výsledek', ['reviewed' => 'Příloha prověřena', 'not_needed' => 'Příloha není potřebná']);
+        $form->addTextArea('reason', 'Důvod výsledku')->setRequired()->addRule(Form::MaxLength, 'Nejvýše 4000 znaků.', 4000);
+        $form->addTextArea('findings', 'Zjištění z přílohy')->addRule(Form::MaxLength, 'Nejvýše 20000 znaků.', 20000);
+        $form->addTextArea('evidence', 'Doklad přečtení (soubor a stránky)')->addRule(Form::MaxLength, 'Nejvýše 4000 znaků.', 4000);
+        $form->addProtection();
+        $form->addSubmit('save', 'Uložit výsledek ověření');
+        $form->onSuccess[] = function (Form $form): void {
+            $v = (array) $form->getValues();
+            $user = (int) $this->getUser()->getId();
+            try {
+                $item = null;
+                [$attachmentId, $revision] = array_map(intval(...), explode(':', (string) $v['key']));
+                foreach ($this->attachments->listForOpportunity($user, $this->opportunityId) as $row) {
+                    if ((int) $row['id'] === $attachmentId) { $item = $row; break; }
+                }
+                if ($item === null) { throw new \InvalidArgumentException('Příloha nebyla nalezena.'); }
+                $this->attachments->save($user, $this->opportunityId, (int) $item['source_version_id'], [[
+                    'key' => $item['attachment_key'], 'name' => $item['name'], 'status' => $v['status'], 'reason' => $v['reason'],
+                    'questions' => $item['questions'], 'findings' => $v['findings'], 'evidence' => $v['evidence'],
+                    'observedAt' => (new \DateTimeImmutable())->format(DATE_ATOM), 'expectedRevision' => $revision,
+                ]]);
+            } catch (\InvalidArgumentException $e) { $form->addError($e->getMessage()); return; }
+            $this->flashMessage('Výsledek přílohy uložen. Podle zjištění aktualizujte také posouzení nabídky.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
     }
 
     protected function createComponentActionItemForm(): Form

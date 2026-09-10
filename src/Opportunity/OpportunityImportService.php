@@ -18,6 +18,7 @@ final class OpportunityImportService
         private readonly AuditLogger $auditLogger,
         private readonly ProjectCareService $projectCare,
         private readonly CounterpartyService $counterparties,
+        private readonly AttachmentReviewService $attachments,
     ) {
     }
 
@@ -108,6 +109,10 @@ final class OpportunityImportService
                 $this->completeExistingVersion($versionId, $import, $sourceId === null ? 'manual' : 'codex');
             }
 
+            if ($import->attachmentReviews !== []) {
+                if ($actorUserId === null) { throw new \InvalidArgumentException('Přílohy vyžadují vlastníka.'); }
+                $this->attachments->save($actorUserId, $opportunityId, $versionId, $import->attachmentReviews);
+            }
             $result = new OpportunityImportResult($opportunityId, $versionId, $opportunityCreated, $versionCreated);
             if ($import->projectCare !== null) {
                 $this->projectCare->save($opportunityId, (int) $this->database->fetchField('SELECT lock_version FROM opportunities WHERE id = ?', $opportunityId), $import->projectCare, $actorUserId, $versionId);

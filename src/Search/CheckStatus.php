@@ -15,7 +15,7 @@ final class CheckStatus
             'planned' => 'Čeká na kontrolu',
             'waiting_for_login' => 'Vyžaduje přihlášení',
             'resume_requested' => 'Čeká na pokračování',
-            'complete' => 'Úplně prověřeno',
+            'complete' => 'Průchod dokončen',
             'partial' => 'Částečně prověřeno',
             'error' => 'Kontrola selhala',
             'cancelled' => 'Zrušeno',

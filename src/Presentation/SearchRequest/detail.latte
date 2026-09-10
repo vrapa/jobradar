@@ -21,7 +21,7 @@
 <header class="mb-4">
     <div class="d-flex flex-wrap gap-2 mb-2">
         <span class="badge text-bg-light border">{App\Search\CheckStatus::label($request->status)}</span>
-        <span class="badge text-bg-primary">{$request->checkedSourceCount()} z {count($request->sources)} úplně zkontrolováno</span>
+        <span class="badge text-bg-primary">{$request->checkedSourceCount()} z {count($request->sources)} zdrojů s dokončeným průchodem</span>
     </div>
     <h1 class="display-6 fw-bold">Kontrola #{$request->id}</h1>
     <p class="lead text-body-secondary">Plánovaný zdroj není považován za zkontrolovaný, dokud Codex neuloží skutečný úplný průchod a jeho počty.</p>
@@ -92,6 +92,7 @@
                     <div class="col-6 col-md-3"><div class="small text-body-secondary">Duplicity</div><div class="fw-semibold">{$source->duplicateCount ?? 'Neznámé'}</div></div>
                     <div class="col-6 col-md-3"><div class="small text-body-secondary">Odmítnuto</div><div class="fw-semibold">{$source->rejectedCount ?? 'Neznámé'}</div></div>
                 </div>
+                <p n:if="$source->pendingAttachmentOpportunityCount > 0" class="alert alert-warning mt-3">Nabídky čekající na ověření příloh: {$source->pendingAttachmentOpportunityCount}. Navazující úkoly najdete u nabídek; dokončení průchodu neznamená ověření jejich příloh.</p>
                 <div n:if="$source->incompleteReason !== null" class="alert alert-secondary mt-3 mb-0 preserve-lines">Důvod nedokončení: {$source->incompleteReason}</div>
                 <div n:if="$source->errorCode !== null" class="small text-danger mt-2">Kód chyby: {$source->errorCode}</div>
                 <div n:if="$source->startedAt !== null" class="small text-body-secondary mt-3">

@@ -26,7 +26,7 @@
                 <h2 id="coverage-title" class="h5 mb-1">Poslední kontrola zdrojů</h2>
                 <p n:if="$coverage === null" class="text-body-secondary mb-0">Zatím nebyla výslovně vyžádána žádná kontrola.</p>
                 <p n:if="$coverage !== null" class="mb-0">
-                    <strong>{$coverage->completeCount} z {$coverage->plannedCount}</strong> zdrojů úplně zkontrolováno
+                    <strong>{$coverage->completeCount} z {$coverage->plannedCount}</strong> zdrojů s dokončeným průchodem
                     {if $coverage->partialCount > 0}, {$coverage->partialCount} částečně{/if}
                     {if $coverage->unverifiedCount > 0}, {$coverage->unverifiedCount} neprověřeno{/if}
                     {if $coverage->pendingCount > 0}, {$coverage->pendingCount} čeká / probíhá{/if}.

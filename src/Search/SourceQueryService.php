@@ -127,6 +127,7 @@ final class SourceQueryService
                 errorCode: self::nullableString($row['error_code']),
                 loginRequired: (bool) ($row['login_required'] ?? false),
                 loginUrl: self::nullableString($row['login_url']),
+                pendingAttachmentOpportunityCount: (int) $row['pending_attachments'],
             ),
             $this->database->fetchAll(
                 'SELECT request_source.source_id, source.name AS source_name, source.priority,
@@ -135,7 +136,10 @@ final class SourceQueryService
                         run_source.stored_count, run_source.updated_count, run_source.duplicate_count,
                         run_source.rejected_count, run_source.started_at AS source_started_at,
                         run_source.finished_at AS source_finished_at, run_source.incomplete_reason,
-                        run_source.error_code, run_source.login_required, access.login_url
+                        run_source.error_code, run_source.login_required, access.login_url,
+                        (SELECT COUNT(DISTINCT ar.opportunity_id) FROM attachment_reviews ar
+                         JOIN search_run_opportunities ro ON ro.opportunity_id=ar.opportunity_id
+                         WHERE ro.search_run_source_id=run_source.id AND ar.user_id=(SELECT requested_by_user_id FROM search_requests WHERE id=run.search_request_id) AND ar.status=\'pending\') AS pending_attachments
                  FROM search_request_sources request_source
                  INNER JOIN sources source ON source.id = request_source.source_id
                  LEFT JOIN search_runs run ON run.search_request_id = request_source.search_request_id

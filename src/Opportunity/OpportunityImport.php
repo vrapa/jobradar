@@ -19,7 +19,10 @@ final readonly class OpportunityImport
         public ?ProjectCareInput $projectCare = null,
         public ?int $discoveryDefinitionId = null,
         public ?CounterpartyInput $counterparty = null,
+        /** @var list<array<string,mixed>> */
+        public array $attachmentReviews = [],
     ) {
+        AttachmentReviewInput::parse($attachmentReviews);
         if ($discoveryDefinitionId !== null && $discoveryDefinitionId < 1) { throw new \InvalidArgumentException('Neplatná definice nalezení.'); }
         if (trim($this->originalTitle) === '') {
             throw new \InvalidArgumentException('Původní titulek je povinný.');

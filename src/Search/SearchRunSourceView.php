@@ -27,6 +27,7 @@ final readonly class SearchRunSourceView
         public ?string $errorCode,
         public bool $loginRequired,
         public ?string $loginUrl,
+        public int $pendingAttachmentOpportunityCount = 0,
     ) {
     }
 

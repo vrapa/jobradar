@@ -44,6 +44,7 @@ final class SearchRequestTransformer
             'status' => $source->status,
             'started' => $source->wasStarted(),
             'checked_completely' => $source->wasCheckedCompletely(),
+            'pending_attachment_opportunities' => $source->pendingAttachmentOpportunityCount,
             'scope' => [
                 'description' => $source->queryText,
                 'horizon_from' => $source->horizonFrom?->format(DATE_ATOM),

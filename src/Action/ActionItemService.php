@@ -11,6 +11,7 @@ use Nette\Database\Row;
 final class ActionItemService
 {
     public const TYPES = [
+        'verify_attachment' => 'Prověřit přílohu',
         'verify_terms' => 'Ověřit podmínky',
         'review_application' => 'Zkontrolovat připravenou žádost',
         'reply' => 'Odpovědět',

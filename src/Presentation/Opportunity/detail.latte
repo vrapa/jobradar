@@ -33,7 +33,7 @@
 <header class="mb-4">
     <div class="d-flex flex-wrap gap-2 mb-2">
         <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
-        <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplný zdroj</span>
+        <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplný obsah nabídky</span>
         <span class="badge text-bg-light border">{$opportunity->versionCount} {if $opportunity->versionCount === 1}verze{else}verzí{/if}</span>
     </div>
     <h1 class="display-6 fw-bold mb-2">{$opportunity->title}</h1>
@@ -43,6 +43,33 @@
         <a n:href="OpportunityTerms: $opportunity->id" class="btn btn-primary">Upravit podmínky</a>
     </div>
 </header>
+
+<section n:if="count($attachmentReviews) > 0" class="card p-3 mb-4">
+    <h2 class="h5">Přílohy a podklady</h2>
+    <p class="text-body-secondary">Ověření řešíme v projektu Práce. Dokončení navazujícího úkolu samo nepotvrzuje přečtení přílohy.</p>
+    <article n:foreach="$attachmentReviews as $attachment" class="border-top pt-3 mb-3">
+        <h3 class="h6">{$attachment['name']}</h3>
+        <span class="badge {$attachment['status'] === 'pending' ? 'text-bg-warning' : 'text-bg-light border'}">{$attachment['status'] === 'pending' ? 'Čeká na ověření přílohy' : ($attachment['status'] === 'reviewed' ? 'Příloha prověřena' : 'Příloha není potřebná')}</span>
+        <p class="preserve-lines mt-2">{$attachment['reason']}</p>
+        <p n:if="$attachment['questions'] !== ''" class="preserve-lines"><strong>Co zjistit:</strong> {$attachment['questions']}</p>
+        <p n:if="$attachment['findings'] !== ''" class="preserve-lines"><strong>Zjištění:</strong> {$attachment['findings']}</p>
+        <p n:if="$attachment['evidence'] !== ''" class="preserve-lines"><strong>Doklad:</strong> {$attachment['evidence']}</p>
+        <p class="small text-body-secondary">Pozorováno {$attachment['observed_at']}</p>
+    </article>
+    <details open><summary>Zapsat výsledek ověření</summary>
+    {form attachmentForm}
+        <div n:if="$form->hasErrors()" class="alert alert-danger"><p n:foreach="$form->errors as $error">{$error}</p></div>
+        <div class="row g-3 mt-1">
+            <div class="col-md-6">{label key, class: 'form-label' /}{input key, class: 'form-select'}</div>
+            <div class="col-12">{label status, class: 'form-label' /}{input status, class: 'form-select'}</div>
+            <div class="col-12">{label reason, class: 'form-label' /}{input reason, class: 'form-control'}</div>
+            <div class="col-12">{label findings, class: 'form-label' /}{input findings, class: 'form-control'}</div>
+            <div class="col-12">{label evidence, class: 'form-label' /}{input evidence, class: 'form-control'}</div>
+            <div class="col-12">{input save, class: 'btn btn-primary'}</div>
+        </div>
+    {/form}
+    </details>
+</section>
 
 <section class="card shadow-sm mb-4 {if $assessment !== null}border-info-subtle{/if}" aria-labelledby="assessment-title">
     <div class="card-body">

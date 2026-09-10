@@ -9,7 +9,7 @@ final class OpportunityJsonMapper
     private const ALLOWED_KEYS = [
         'url', 'originalTitle', 'originalText', 'companyName', 'translatedTitle',
         'translatedText', 'summary', 'sourceLanguage', 'incomplete',
-        'projectCare', 'discoveryDefinitionId', 'counterparty',
+        'projectCare', 'discoveryDefinitionId', 'counterparty', 'attachmentReviews',
     ];
 
     public function __construct(private readonly UrlNormalizer $urlNormalizer)
@@ -58,6 +58,7 @@ final class OpportunityJsonMapper
                 projectCare: ProjectCareInput::fromPayload($item['projectCare'] ?? null),
                 discoveryDefinitionId: $item['discoveryDefinitionId'] ?? null,
                 counterparty: CounterpartyInput::fromPayload($item['counterparty'] ?? null),
+                attachmentReviews: AttachmentReviewInput::parse($item['attachmentReviews'] ?? []),
             );
         }
 

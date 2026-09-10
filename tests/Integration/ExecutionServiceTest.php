@@ -93,7 +93,7 @@ final class ExecutionServiceTest extends TestCase
                 self::assertIsArray($newLease);
                 $newBase = ['run_id' => $newLease['run_id'], 'lease_token' => $newLease['lease_token'], 'source_id' => $ids[1]];
                 $execution->execute($identity, [...$start, ...$newBase, 'idempotency_key' => 'pilot-start-' . $unique]);
-                $import = ['operation' => 'import', ...$newBase, 'idempotency_key' => 'pilot-import-' . $unique, 'payload' => ['url' => 'https://example.test/' . $unique . '/offer', 'originalTitle' => 'Synthetic PHP', 'originalText' => 'Synthetic content; no real job', 'translatedText' => 'Syntetický obsah, nikoli pracovní nabídka']];
+                $import = ['operation' => 'import', ...$newBase, 'idempotency_key' => 'pilot-import-' . $unique, 'payload' => ['url' => 'https://example.test/' . $unique . '/offer', 'originalTitle' => 'Synthetic PHP', 'originalText' => 'Synthetic content; no real job', 'translatedText' => 'Syntetický obsah, nikoli pracovní nabídka', 'attachmentReviews' => [['key' => 'brief.pdf', 'name' => 'Brief', 'status' => 'pending', 'reason' => 'Download failed', 'questions' => 'Scope?', 'observedAt' => $now->format(DATE_ATOM)]]]];
                 $imported = $execution->execute($identity, $import);
                 self::assertTrue($imported['opportunity_created']);
                 self::assertEquals($imported, $execution->execute($identity, $import));
@@ -107,6 +107,9 @@ final class ExecutionServiceTest extends TestCase
                 self::rejects(fn () => $execution->execute($identity, $completed));
                 $execution->execute($identity, [...$checkpoint, ...$newBase, 'idempotency_key' => 'pilot-checkpoint-' . $unique]);
                 self::assertSame('complete', $execution->execute($identity, $completed)['request_status']);
+                $detail = $queries->getRequestDetail($user, (int) $newLease['request_id']);
+                self::assertNotNull($detail);
+                self::assertSame(1, array_sum(array_map(static fn ($source): int => $source->pendingAttachmentOpportunityCount, $detail->sources)));
                 self::assertCount(1, $queries->unresolvedSources($user));
                 self::assertSame($ids[0], (int) $queries->unresolvedSources($user)[0]['id']);
                 self::assertCount(0, $queries->unresolvedSources($user + 1000000));

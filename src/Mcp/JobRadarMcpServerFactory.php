@@ -135,6 +135,7 @@ final class JobRadarMcpServerFactory
                 'summary' => ['type' => ['string', 'null'], 'maxLength' => 65535],
                 'sourceLanguage' => ['type' => ['string', 'null'], 'maxLength' => 16],
                 'incomplete' => ['type' => 'boolean'],
+                'attachmentReviews' => \App\Opportunity\AttachmentReviewInput::schema(),
                 'projectCare' => \App\Opportunity\ProjectCareInput::schema(),
                 'counterparty' => \App\Opportunity\CounterpartyInput::schema(),
                 'discoveryDefinitionId' => ['type' => ['integer','null'], 'minimum' => 1],
