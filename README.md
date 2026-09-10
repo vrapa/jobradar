@@ -1,60 +1,64 @@
 # JobRadar
 
+**English** | [Česky](README.cs.md)
+
 [![CI](https://github.com/vrapa/jobradar/actions/workflows/ci.yml/badge.svg)](https://github.com/vrapa/jobradar/actions/workflows/ci.yml)
 
-JobRadar je open-source, privacy-first self-hosted systém pro vyhledávání, ukládání, překlad, hodnocení a řízení pracovních příležitostí. Evidence konkrétního uživatele zůstává v jeho soukromé instanci.
+JobRadar is an open-source, self-hosted system for discovering, saving, translating, assessing, and managing job opportunities, with privacy built into its workflow. Each user's records stay in their own private instance.
 
-JobRadar není auto-apply bot. Rozhodnutí `Reagovat` pouze zařadí nabídku do interní fronty; odeslání žádosti je vždy samostatný auditovaný krok s výslovným souhlasem.
+JobRadar does not automatically apply for jobs. Choosing **Respond** (`Reagovat` in the Czech interface) only adds an opportunity to an internal preparation queue. Sending an application is a separate, audited step that requires explicit approval.
 
-Kompletní zadání a pořadí implementace jsou v [docs/implementation-plan.md](docs/implementation-plan.md).
+The full specification and implementation sequence are in the [implementation plan](docs/implementation-plan.md) (in Czech). The interface and most detailed documentation are currently in Czech.
 
-## Rychlé spuštění
+## Quick start
 
-Repozitář obsahuje samostatný Compose stack bez závislosti na konkrétní cestě, doméně nebo reverzní proxy. Výchozí hesla jsou pouze pro první lokální spuštění; před jiným nasazením je nastavte v `.env`.
+The repository includes a standalone Docker Compose stack with no dependency on a particular directory, domain, or reverse proxy. Default passwords are intended only for an initial local run; set your own in `.env` before any other deployment.
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up -d --build
 docker compose exec web php bin/jobradar database:migrate
-docker compose exec web php bin/jobradar user:create-admin uzivatel@example.test "Administrátor"
+docker compose exec web php bin/jobradar user:create-admin user@example.test "Administrator"
 ```
 
-Aplikace bude dostupná pouze z lokálního počítače na [http://localhost:8080](http://localhost:8080).
+On Linux or macOS, use `cp .env.example .env` for the first command. The application is available only on the local machine at [http://localhost:8080](http://localhost:8080).
 
-## Provoz a konfigurace
+## Operation and configuration
 
-Stack lze spustit z libovolného umístění, kde jsou dostupné Docker a Docker Compose. V `.env` nastavte zejména veřejnou adresu `APP_URL`, bezpečná databázová hesla a případně `APP_PORT`. `APP_BIND_ADDRESS` zůstává ve výchozím stavu `127.0.0.1`; změňte ji jen při vědomém zpřístupnění přes vlastní síťové zabezpečení nebo reverzní proxy.
+Run the stack from any directory with Docker and Docker Compose available. In `.env`, configure the public application URL (`APP_URL`), secure database passwords, and optionally `APP_PORT`. The default `APP_BIND_ADDRESS` is `127.0.0.1`; change it only when deliberately exposing the application through your own network security or reverse proxy.
 
-Správa databáze a administrátorského účtu probíhá uvnitř aplikačního kontejneru:
+Manage the database and administrator account inside the application container:
 
 ```powershell
 docker compose exec web php bin/jobradar database:migrate
-docker compose exec web php bin/jobradar user:create-admin uzivatel@example.test "Administrátor"
+docker compose exec web php bin/jobradar user:create-admin user@example.test "Administrator"
 ```
 
-Heslo administrátora se zadá skrytě interaktivně a není argumentem příkazu.
+The administrator password is entered interactively with hidden input, never as a command argument.
 
-API klienta a časově omezený token vytvoří administrátor například takto:
+An administrator can create an API client and an expiring token:
 
 ```powershell
-docker compose exec web php bin/jobradar api:create-client admin@example.test "Local MCP" mcp --scope=sources:read --scope=opportunities:read --days=30
+docker compose exec web php bin/jobradar api:create-client user@example.test "Local MCP" mcp --scope=sources:read --scope=opportunities:read --days=30
 ```
 
-Plná hodnota tokenu se vypíše právě při vytvoření; JobRadar ukládá jen její hash a bezpečný prefix. Každé oprávnění uvádějte samostatnou volbou `--scope`.
+The full token is shown only when it is created. JobRadar stores its hash and a safe prefix. Specify each permission with a separate `--scope` option.
 
-Kontroly nově zpracovává Codex přes Chrome a oddělené vykonávací MCP se scope `search:execute`. Demonstrační `runner:work-once` je vypnutý a jeho claim API vrací 410. Nasazení, zabezpečení, obnovu a testy popisuje [vykonavatel](docs/executor.md).
+Source checks are performed by Codex through Chrome and a separate execution MCP with the `search:execute` scope. The demonstration `runner:work-once` command is disabled, and its claim API returns HTTP 410. See the [executor documentation](docs/executor.md) (in Czech) for deployment, security, recovery, and testing.
 
 ```powershell
-.\executor\install.ps1 -Container JobRadar-web
+.\executor\install.ps1 -Container <web-container-name>
 .\executor\launch.ps1 -Probe
 python executor/smoke_stdio.py
 ```
 
-Jméno kontejneru přizpůsobte nasazení. Instalace na Windows chrání token přes DPAPI a nepřebírá žádnou kontrolu. Produkční automatizaci zapněte až po skutečném plánovaném ověření a pilotu s uloženými zdroji, profilem a pravidly. Stav ověření je v [protokolu integrace](docs/execution-verification.md).
+Replace `<web-container-name>` with the name of your deployed web container. On Windows, installation protects the token using DPAPI and does not claim any source check. Enable production automation only after verifying a scheduled run and completing a pilot with configured sources, a candidate profile, and assessment rules. The [integration verification guide](docs/execution-verification.md) describes the checks to perform.
 
-MCP server používá oficiální PHP SDK a standardní STDIO transport. Spouští se `php bin/jobradar-mcp`, URL čte z `JOBRADAR_MCP_API_URL` a vlastní token z `JOBRADAR_MCP_TOKEN`. Token vystavený pro MCP může mít jen scopes potřebné pro konkrétní nástroje; například read-only klient nepotřebuje zápisová oprávnění. Server nabízí nástroje pro zdroje, kontroly, nabídky, frontu k reakci, posouzení a vratná jednotlivá i atomická dávková rozhodnutí pod časově omezenou delegací. Vytváření delegací má samostatný scope `decisions:delegate`, který běžnému MCP tokenu nevydávejte; použije se jen tehdy, když má klient delegaci založit po vašem výslovném pokynu. Žádný nástroj neodesílá žádost.
+The general-purpose MCP server uses the official PHP SDK and standard STDIO transport. Start it with `php bin/jobradar-mcp`. It reads the API URL from `JOBRADAR_MCP_API_URL` and its separate token from `JOBRADAR_MCP_TOKEN`. Grant only the scopes required by the client's tools; a read-only client does not need write permissions.
 
-Příklad konfigurace MCP hostitele (doplňte absolutní cestu a token mimo Git):
+The server provides tools for sources, checks, opportunities, the response queue, assessments, and reversible individual or atomic batch decisions under a time-limited delegation. Creating a delegation requires the separate `decisions:delegate` scope. Grant it only to a client that needs to create delegations following your explicit instruction. No tool sends an application.
+
+Example MCP host configuration (supply an absolute path and keep the token outside Git):
 
 ```json
 {
@@ -64,14 +68,14 @@ Příklad konfigurace MCP hostitele (doplňte absolutní cestu a token mimo Git)
       "args": ["C:/absolute/path/jobradar/bin/jobradar-mcp"],
       "env": {
         "JOBRADAR_MCP_API_URL": "http://localhost:8080/api/v1",
-        "JOBRADAR_MCP_TOKEN": "<samostatný MCP token>"
+        "JOBRADAR_MCP_TOKEN": "<separate MCP token>"
       }
     }
   }
 }
 ```
 
-Kontrola konfigurace a stavu:
+Inspect configuration and service status:
 
 ```powershell
 docker compose config
@@ -79,48 +83,60 @@ docker compose ps
 docker compose logs -f web db
 ```
 
-Zastavení prostředí bez smazání databáze:
+Stop the environment while preserving the database:
 
 ```powershell
 docker compose down
 ```
 
-Smazání lokálních dat je záměrně oddělený destruktivní krok a není součástí běžného vypnutí.
+Deleting local data is a separate, deliberate operation and is not part of a normal shutdown.
 
-## Záloha a obnova
+## Backup and restore
 
-SQL záloha se vytváří konzistentním snapshotem a nikdy nepřepíše existující soubor. Obsahuje soukromá data instance, proto ji necommitujte, uchovávejte ji mimo veřejný repozitář a pro přenos nebo dlouhodobé uložení ji zašifrujte:
+SQL backups use a consistent snapshot and never overwrite an existing file. They contain private instance data: keep them out of Git and public repositories, and encrypt them for transfer or long-term storage.
 
 ```powershell
-docker compose exec web php bin/jobradar database:backup var/backups/jobradar-2026-09-07.sql
-docker compose cp web:/var/www/html/var/backups/jobradar-2026-09-07.sql C:\private-backups\jobradar-2026-09-07.sql
+docker compose exec web php bin/jobradar database:backup var/backups/jobradar-backup.sql
+docker compose cp web:/var/www/html/var/backups/jobradar-backup.sql C:\private-backups\jobradar-backup.sql
 ```
 
-`database:restore` z bezpečnostních důvodů odmítne databázi obsahující jedinou tabulku. Nejprve proto vytvořte samostatnou prázdnou MySQL databázi, nastavte pro ni `DB_NAME` a oprávnění aplikačního uživatele a teprve poté spusťte:
+For safety, `database:restore` refuses a database containing any tables. First create a separate, empty MySQL database, configure its `DB_NAME` and the application user's permissions, then run:
 
 ```powershell
-docker compose exec -e DB_NAME=jobradar_restore web php bin/jobradar database:restore var/backups/jobradar-2026-09-07.sql
+docker compose exec -e DB_NAME=jobradar_restore web php bin/jobradar database:restore var/backups/jobradar-backup.sql
 ```
 
-Heslo se nepředává argumentem procesu ani nevypisuje; klienti `mysqldump` a `mysql` je dostanou pouze přes prostředí podřízeného procesu. Po obnově ověřte přihlášení, počty nabídek a poslední běh dříve, než novou databázi použijete jako produkční.
+The password is neither printed nor passed as a process argument. The `mysqldump` and `mysql` clients receive it only through the child process environment. After restoring, verify sign-in, opportunity counts, and the most recent run before using the restored database in production.
 
-## Kontroly kvality
+## Quality checks
+
+PHP integration tests require `APP_ENV=test` and a separate database named `jobradar_test` or `jobradar_test_<suffix>`. Provision that database and its access permissions before running the suite; never point tests at your normal instance database.
 
 ```powershell
-docker compose exec web composer check
+docker compose exec -e APP_ENV=test -e DB_NAME=jobradar_test web composer check
+npm ci
 npm run build
 ```
 
-Stejné kontroly spouští GitHub Actions nad MySQL 8.4; CI navíc ověřuje reprodukovatelné assety a sestavení samostatného Docker image.
+GitHub Actions runs the checks against MySQL 8.4 and also verifies repository privacy, reproducible frontend assets, and the standalone Docker image build.
 
-## Stav projektu
+Before committing or pushing, run the privacy guard and review the diff for personal context:
 
-Implementovaná je Nette aplikace pro nabídky, posouzení, vratná rozhodnutí, auditované kontroly zdrojů, verzované API, čtecí i vykonávací MCP a ověřitelná záloha/obnova. Přestavba přidává checkpointy, izolaci přidělené práce a dashboard neúplných zdrojů; produkční konfigurace a průchod portály vyžadují dokončení integračního pilotu.
+```powershell
+python scripts/privacy-check.py --staged
+python scripts/privacy-check.py --history
+```
 
-Navazující konkrétní kroky se ukládají jako interní `action_items`; volitelný Todoist je pouze zrcadlí a vazbu drží v `external_tasks`. Samotné rozhodnutí `Reagovat` úkol nevytváří. Aktuální rozdělení odpovědnosti a stav automatizací popisuje [cílové provozní workflow](docs/target-workflow.md).
+Enable the included local hooks with `git config core.hooksPath .githooks`. Automated scanning supplements a human review; it cannot reliably identify personal plans or preferences in ordinary prose.
 
-## Licence
+## Project status
 
-JobRadar je dostupný pod licencí [MIT](LICENSE). Zdrojový kód a demonstrační data mohou být veřejné; reálné nabídky, profily kandidátů, tokeny, logy a databáze do repozitáře nepatří.
+Implemented features include a Nette application for opportunities, assessments, reversible decisions, audited source checks, a versioned API, general-purpose and execution MCP servers, and verifiable backup and restore. Execution supports checkpoints, isolation of assigned work, and a dashboard of incomplete source checks. Each deployment needs its own configuration and integration pilot before production portal traversal.
 
-Bezpečnostní hlášení a pravidla pro přispívání popisují [SECURITY.md](SECURITY.md) a [CONTRIBUTING.md](CONTRIBUTING.md).
+Concrete follow-up steps are stored as internal `action_items`. Optional Todoist synchronization mirrors them and records links in `external_tasks`. Choosing **Respond** alone does not create a task. The [target workflow](docs/target-workflow.md) (in Czech) describes responsibilities and integration boundaries.
+
+## License
+
+JobRadar is available under the [MIT license](LICENSE). Source code and synthetic demonstration data may be public. Real opportunities, candidate profiles, tokens, logs, and databases do not belong in this repository.
+
+See [SECURITY.md](SECURITY.md) for security reporting and [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
