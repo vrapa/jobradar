@@ -1,6 +1,6 @@
 # Reakce a čekání na odpověď
 
-1. Uživatel označí nabídku Reagovat a podle potřeby přidá navazující úkol přípravy.
+1. Uživatel označí nabídku Reagovat. JobRadar pro dosud nepřipravenou žádost zajistí společný otevřený úkol přípravy reakcí, pokud již neexistuje. Todoist zrcadlí tento krok s odkazem na frontu K reakci; konkrétní výběr zůstává v JobRadaru.
 2. V soukromém projektu načti detail JobRadaru včetně `decision_state.lock_version`, `action_items` a `application_history`. Zkontroluj, zda už nebylo odesláno. Připrav soubory; po dokončení návrhu zaznamenej `prepared` s odkazem na konkrétní finální soubor a skutečným časem. Stav je Připraveno ke schválení.
 3. Ukaž uživateli konečný obsah, přílohy, cíl a použité údaje. Odeslání vyžaduje konkrétní souhlas. Při přípravě navrhni i datum následné kontroly odpovědi, obvykle 7 dní po odeslání; u sjednaného termínu použij tento termín. Zvolený termín musí být uživateli známý před jeho zapsáním.
 4. Po skutečném odeslání a ověření potvrzení portálu nebo odeslaného e-mailu načti aktuální verzi stavu a zavolej `record_application_event` přes klienta se scope `applications:write`. V `event` uveď `submitted`, `expected_lock_version`, stabilní `idempotency_key`, `reference` s konkrétním potvrzením, `occurred_at` s časovým pásmem, `channel` (portal/email/other), `approval_reference`, `follow_up_at` a explicitní `complete_action_item_ids` hotových přípravných kroků. Nezapisuj telefon, přihlašovací údaje ani celé zprávy. Ztracenou odpověď opakuj se stejným klíčem a stejným obsahem; neodesílej znovu žádost.

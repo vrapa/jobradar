@@ -27,6 +27,15 @@ final class Bootstrap
 
     public function bootConsole(): Container
     {
+        // Refuse before loading configuration or creating shared web cache files.
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            throw new \RuntimeException(
+                'Konzolové příkazy JobRadaru nespouštějte jako root. '
+                . 'Použijte docker compose exec --user www-data web php bin/jobradar ... '
+                . 'nebo docker exec --user www-data <kontejner> php <skript> ...',
+            );
+        }
+
         return $this->createContainer(enableTracy: false);
     }
 

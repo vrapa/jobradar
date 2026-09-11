@@ -294,6 +294,7 @@ final class DecisionDelegationServiceTest extends TestCase
             }
             if ($userId !== null) {
                 $database->query('DELETE FROM audit_log WHERE actor_user_id = ?', $userId);
+                $database->query('DELETE FROM action_items WHERE user_id = ?', $userId);
                 $database->query('DELETE FROM users WHERE id = ?', $userId);
             }
         }

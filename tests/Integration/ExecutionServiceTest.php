@@ -107,6 +107,9 @@ final class ExecutionServiceTest extends TestCase
                 self::rejects(fn () => $execution->execute($identity, $completed));
                 $execution->execute($identity, [...$checkpoint, ...$newBase, 'idempotency_key' => 'pilot-checkpoint-' . $unique]);
                 self::assertSame('complete', $execution->execute($identity, $completed)['request_status']);
+                self::assertSame(1, (int) $db->fetchField("SELECT COUNT(*) FROM action_items WHERE user_id = ? AND action_type = 'review_opportunities' AND status = 'open'", $user));
+                self::assertSame('complete', $execution->execute($identity, $completed)['request_status']);
+                self::assertSame(1, (int) $db->fetchField("SELECT COUNT(*) FROM action_items WHERE user_id = ? AND action_type = 'review_opportunities'", $user));
                 $detail = $queries->getRequestDetail($user, (int) $newLease['request_id']);
                 self::assertNotNull($detail);
                 self::assertSame(1, array_sum(array_map(static fn ($source): int => $source->pendingAttachmentOpportunityCount, $detail->sources)));

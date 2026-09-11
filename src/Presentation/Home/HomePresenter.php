@@ -27,6 +27,9 @@ final class HomePresenter extends SecuredPresenter
     public function renderDefault(): void
     {
         $items = $this->opportunities->listCurrent((int) $this->getUser()->getId());
+        if ($this->getParameter('decision') === 'undecided') {
+            $items = array_values(array_filter($items, static fn ($item): bool => $item->decision === OpportunityDecision::Undecided));
+        }
         $care = (string) ($this->getParameter('care') ?? 'all');
         if (!in_array($care, ['all','yes','no','unknown'], true)) { $care = 'all'; }
         if ($care !== 'all') { $items = array_values(array_filter($items, static fn ($o): bool => $o->projectCare === match ($care) { 'yes' => true, 'no' => false, default => null })); }
@@ -35,6 +38,7 @@ final class HomePresenter extends SecuredPresenter
         if ($party !== 'all') { $items = array_values(array_filter($items, static fn ($o): bool => $o->counterparty === ($party === 'unknown' ? null : $party))); }
         $this->template->setParameters([
             'opportunities' => $items,
+            'onlyUndecided' => $this->getParameter('decision') === 'undecided',
             'opportunityCount' => count($items),
             'care' => $care,
             'party' => $party,

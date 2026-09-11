@@ -48,4 +48,6 @@ Rollback provozu: pozastavit automatizaci a odvolat konkrétní executor token s
 
 ## Testy
 
+Všechny aplikační CLI příkazy (včetně migrací, záloh a provisioning skriptů) v Dockeru spouštět přes `docker compose exec --user www-data web ...` nebo `docker exec --user www-data <kontejner> ...`. Bootstrap odmítá root před vytvořením runtime souborů. Instalační PowerShell skripty tento účet již nastavují. Nepoužívat `chmod 777`; již vzniklé chybné vlastnictví opravit pouze na ověřeném runtime adresáři.
+
 `python -m unittest discover -s executor -v`; PHP integrační/regresní testy v Dockeru jako webový uživatel; PHPStan s odděleným runtime; `npm run build`; `python executor/smoke_stdio.py` až po instalaci. Poslední konkrétní výsledky a neověřené kroky jsou v [ověření integrace](execution-verification.md).

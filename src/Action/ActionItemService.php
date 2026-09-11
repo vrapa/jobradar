@@ -11,6 +11,8 @@ use Nette\Database\Row;
 final class ActionItemService
 {
     public const TYPES = [
+        'prepare_applications' => 'Připravit reakce na nabídky',
+        'review_opportunities' => 'Posoudit nové nabídky',
         'verify_attachment' => 'Prověřit přílohu',
         'verify_terms' => 'Ověřit podmínky',
         'review_application' => 'Zkontrolovat připravenou žádost',
@@ -20,7 +22,7 @@ final class ActionItemService
         'other' => 'Jiný konkrétní krok',
     ];
 
-    public function __construct(private readonly Connection $database, private readonly AuditLogger $auditLogger)
+    public function __construct(private readonly Connection $database, private readonly AuditLogger $auditLogger, private readonly string $appUrl)
     {
     }
 
@@ -51,6 +53,16 @@ final class ActionItemService
         $now = self::now();
         $id = 0;
         $this->database->transaction(function () use ($userId, $opportunityId, $type, $title, $details, $dueAt, $origin, $now, &$id): void {
+            if (in_array($type, ['review_opportunities', 'prepare_applications'], true)) {
+                // Serialize all summary creation for this owner, including simultaneous runs.
+                $this->database->fetch('SELECT id FROM users WHERE id = ? FOR UPDATE', $userId);
+                $existing = $this->database->fetchField("SELECT id FROM action_items WHERE user_id = ? AND action_type = ? AND status = 'open' FOR UPDATE", $userId, $type);
+                if ($existing !== null) {
+                    $id = (int) $existing;
+                    return;
+                }
+                $opportunityId = null;
+            }
             $this->database->query('INSERT INTO action_items', [
                 'user_id' => $userId,
                 'opportunity_id' => $opportunityId,
@@ -75,10 +87,40 @@ final class ActionItemService
         return $id;
     }
 
+    /** Called inside the transaction that finishes a run; no external writes here. */
+    public function reviewFinishedRun(int $runId): void
+    {
+        $this->database->transaction(function () use ($runId): void {
+            $run = $this->database->fetch(
+                'SELECT r.run_status, r.review_action_processed_at, q.requested_by_user_id
+                 FROM search_runs r JOIN search_requests q ON q.id = r.search_request_id
+                 WHERE r.id = ? FOR UPDATE', $runId,
+            );
+            if ($run === null || !in_array($run['run_status'], ['complete', 'partial'], true) || $run['review_action_processed_at'] !== null) {
+                return;
+            }
+            $userId = (int) $run['requested_by_user_id'];
+            $hasNew = $this->database->fetchField(
+                "SELECT 1 FROM search_run_opportunities imported
+                 JOIN opportunities o ON o.id = imported.opportunity_id
+                 LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
+                 WHERE imported.search_run_id = ? AND imported.processing_result = 'created'
+                   AND o.archived_at IS NULL AND COALESCE(state.decision, 'undecided') = 'undecided' LIMIT 1",
+                $userId, $runId,
+            );
+            if ($hasNew !== null) {
+                $id = $this->create($userId, null, 'review_opportunities', 'Posoudit nové nabídky v JobRadaru',
+                    'Otevři přehled nerozhodnutých nabídek v JobRadaru a rozhodni, které stojí za reakci. Dokončení tohoto úkolu nemění rozhodnutí nabídek ani neodesílá žádost.', origin: 'system');
+                $this->auditLogger->record('search.review_action_ensured', $userId, ['search_run_id' => $runId, 'action_item_id' => $id]);
+            }
+            $this->database->query('UPDATE search_runs SET review_action_processed_at = ? WHERE id = ?', self::now(), $runId);
+        });
+    }
+
     /** @return list<array<string, mixed>> */
     public function listForOpportunity(int $userId, int $opportunityId): array
     {
-        return array_map(self::map(...), $this->database->fetchAll(
+        return array_map($this->map(...), $this->database->fetchAll(
             'SELECT item.*, task.provider, task.external_id, task.external_url, task.last_synced_at
              FROM action_items item
              LEFT JOIN external_tasks task ON task.action_item_id = item.id
@@ -107,7 +149,7 @@ final class ActionItemService
             'open',
             $onlyWithoutExternalTask,
         );
-        return array_map(self::map(...), $rows);
+        return array_map($this->map(...), $rows);
     }
 
     public function linkExternalTask(int $userId, int $actionItemId, string $provider, string $externalId, ?string $externalUrl): void
@@ -170,7 +212,7 @@ final class ActionItemService
     /** @return list<array<string,mixed>> */
     public function listLinked(int $userId): array
     {
-        return array_map(self::map(...), $this->database->fetchAll(
+        return array_map($this->map(...), $this->database->fetchAll(
             "SELECT item.*, task.provider, task.external_id, task.external_url, task.last_synced_at, task.synced_status
              FROM action_items item JOIN external_tasks task ON task.action_item_id=item.id
              WHERE item.user_id=? AND task.provider='todoist' AND (item.status='open' OR item.status<>task.synced_status) ORDER BY item.id", $userId));
@@ -232,9 +274,15 @@ final class ActionItemService
     }
 
     /** @return array<string, mixed> */
-    private static function map(Row $row): array
+    private function map(Row $row): array
     {
         $values = (array) $row;
+        $values['action_url'] = $values['action_type'] === 'review_opportunities'
+            ? rtrim($this->appUrl, '/') . '/?decision=undecided'
+            : ($values['opportunity_id'] === null ? null : rtrim($this->appUrl, '/') . '/nabidky/' . $values['opportunity_id']);
+        if ($values['action_type'] === 'prepare_applications') {
+            $values['action_url'] = rtrim($this->appUrl, '/') . '/nabidky/k-reakci';
+        }
         $values['id'] = (int) $values['id'];
         $values['user_id'] = (int) $values['user_id'];
         $values['opportunity_id'] = $values['opportunity_id'] === null ? null : (int) $values['opportunity_id'];

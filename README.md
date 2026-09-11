@@ -17,8 +17,8 @@ The repository includes a standalone Docker Compose stack with no dependency on 
 ```powershell
 Copy-Item .env.example .env
 docker compose up -d --build
-docker compose exec web php bin/jobradar database:migrate
-docker compose exec web php bin/jobradar user:create-admin user@example.test "Administrator"
+docker compose exec --user www-data web php bin/jobradar database:migrate
+docker compose exec --user www-data web php bin/jobradar user:create-admin user@example.test "Administrator"
 ```
 
 On Linux or macOS, use `cp .env.example .env` for the first command. The application is available only on the local machine at [http://localhost:8080](http://localhost:8080).
@@ -30,8 +30,8 @@ Run the stack from any directory with Docker and Docker Compose available. In `.
 Manage the database and administrator account inside the application container:
 
 ```powershell
-docker compose exec web php bin/jobradar database:migrate
-docker compose exec web php bin/jobradar user:create-admin user@example.test "Administrator"
+docker compose exec --user www-data web php bin/jobradar database:migrate
+docker compose exec --user www-data web php bin/jobradar user:create-admin user@example.test "Administrator"
 ```
 
 The administrator password is entered interactively with hidden input, never as a command argument.
@@ -39,7 +39,7 @@ The administrator password is entered interactively with hidden input, never as 
 An administrator can create an API client and an expiring token:
 
 ```powershell
-docker compose exec web php bin/jobradar api:create-client user@example.test "Local MCP" mcp --scope=sources:read --scope=opportunities:read --days=30
+docker compose exec --user www-data web php bin/jobradar api:create-client user@example.test "Local MCP" mcp --scope=sources:read --scope=opportunities:read --days=30
 ```
 
 The full token is shown only when it is created. JobRadar stores its hash and a safe prefix. Specify each permission with a separate `--scope` option.
@@ -96,14 +96,14 @@ Deleting local data is a separate, deliberate operation and is not part of a nor
 SQL backups use a consistent snapshot and never overwrite an existing file. They contain private instance data: keep them out of Git and public repositories, and encrypt them for transfer or long-term storage.
 
 ```powershell
-docker compose exec web php bin/jobradar database:backup var/backups/jobradar-backup.sql
+docker compose exec --user www-data web php bin/jobradar database:backup var/backups/jobradar-backup.sql
 docker compose cp web:/var/www/html/var/backups/jobradar-backup.sql C:\private-backups\jobradar-backup.sql
 ```
 
 For safety, `database:restore` refuses a database containing any tables. First create a separate, empty MySQL database, configure its `DB_NAME` and the application user's permissions, then run:
 
 ```powershell
-docker compose exec -e DB_NAME=jobradar_restore web php bin/jobradar database:restore var/backups/jobradar-backup.sql
+docker compose exec --user www-data -e DB_NAME=jobradar_restore web php bin/jobradar database:restore var/backups/jobradar-backup.sql
 ```
 
 The password is neither printed nor passed as a process argument. The `mysqldump` and `mysql` clients receive it only through the child process environment. After restoring, verify sign-in, opportunity counts, and the most recent run before using the restored database in production.
@@ -113,7 +113,7 @@ The password is neither printed nor passed as a process argument. The `mysqldump
 PHP integration tests require `APP_ENV=test` and a separate database named `jobradar_test` or `jobradar_test_<suffix>`. Provision that database and its access permissions before running the suite; never point tests at your normal instance database.
 
 ```powershell
-docker compose exec -e APP_ENV=test -e DB_NAME=jobradar_test web composer check
+docker compose exec --user www-data -e APP_ENV=test -e DB_NAME=jobradar_test web composer check
 npm ci
 npm run build
 ```

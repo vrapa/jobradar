@@ -65,9 +65,20 @@ final class OpportunityDecisionServiceTest extends TestCase
                 $userId,
                 $opportunityId,
             ));
+            $actions = $container->getByType(\App\Action\ActionItemService::class);
+            $plan = $actions->listOpen($userId)[0];
+            self::assertSame('prepare_applications', $plan['action_type']);
+            self::assertNull($plan['opportunity_id']);
+            self::assertStringEndsWith('/nabidky/k-reakci', $plan['action_url']);
+            self::assertSame($plan['id'], $actions->create($userId, null, 'prepare_applications', 'Another summary'));
             $same = $service->setManualDecision($userId, $opportunityId, 1, OpportunityDecision::React);
             self::assertFalse($same->changed);
             self::assertSame(1, $same->lockVersion);
+
+            self::assertCount(1, $actions->listOpen($userId));
+            $actions->complete($userId, $plan['id']);
+            $service->setManualDecision($userId, $opportunityId, 1, OpportunityDecision::React);
+            self::assertCount(0, $actions->listOpen($userId));
 
             $hidden = $service->setManualDecision(
                 $userId,
@@ -118,6 +129,8 @@ final class OpportunityDecisionServiceTest extends TestCase
                 OpportunityDecision::React,
             );
             self::assertSame(4, $assistant->lockVersion);
+            self::assertCount(1, $actions->listOpen($userId));
+            self::assertNotSame($plan['id'], $actions->listOpen($userId)[0]['id']);
             $assistantHistory = $decisionQueries->history($userId, $opportunityId);
             self::assertSame('assistant', $assistantHistory[0]->actorType);
             self::assertSame('none', $database->fetchField(
@@ -143,6 +156,7 @@ final class OpportunityDecisionServiceTest extends TestCase
             }
             if ($userId !== null) {
                 $database->query('DELETE FROM audit_log WHERE actor_user_id = ?', $userId);
+                $database->query('DELETE FROM action_items WHERE user_id = ?', $userId);
                 $database->query('DELETE FROM users WHERE id = ?', $userId);
             }
         }

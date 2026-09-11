@@ -37,7 +37,7 @@ services:
 	- App\Opportunity\OpportunityTermsService
 	- App\Opportunity\OpportunityJsonMapper
 	- App\Opportunity\AttachmentReviewService
-	- App\Action\ActionItemService
+	- App\Action\ActionItemService(appUrl: %app.url%)
 	- App\Application\ApplicationWorkflowService
 	- App\Decision\OpportunityDecisionService
 	- App\Decision\DecisionQueryService

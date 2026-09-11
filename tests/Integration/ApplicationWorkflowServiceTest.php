@@ -41,7 +41,7 @@ final class ApplicationWorkflowServiceTest extends TestCase
             self::assertSame('awaiting_approval', $result['workflow_status']);
             self::assertTrue(array_any($queries->listReactionQueue($user), static fn ($o): bool => $o->id === $offer));
             self::assertSame([], $queries->listAwaitingResponse($user));
-            self::assertCount(2, $actions->listOpen($user));
+            self::assertCount(3, $actions->listOpen($user));
             $submitted = ['event' => 'submitted', 'expected_lock_version' => 2, 'idempotency_key' => 'submitted-' . $unique, 'reference' => 'Verified sent email ID synthetic-1', 'occurred_at' => $now->format(DATE_ATOM), 'channel' => 'email', 'approval_reference' => 'Explicit approval of final text in synthetic task', 'follow_up_at' => $now->modify('+7 days')->format(DATE_ATOM), 'complete_action_item_ids' => [$prep]];
             foreach (['reference', 'approval_reference', 'follow_up_at'] as $required) {
                 $bad = $submitted; unset($bad[$required]);

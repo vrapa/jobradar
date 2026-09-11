@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Decision;
 
 use App\Infrastructure\AuditLogger;
+use App\Action\ActionItemService;
 use App\Opportunity\OpportunityConflictException;
 use Nette\Database\Connection;
 use Nette\Database\Row;
@@ -19,6 +20,7 @@ final class OpportunityDecisionService
     public function __construct(
         private readonly Connection $database,
         private readonly AuditLogger $auditLogger,
+        private readonly ActionItemService $actionItems,
     ) {
     }
 
@@ -91,6 +93,8 @@ final class OpportunityDecisionService
             $actorUserId,
             $delegationId,
         ): DecisionResult {
+            // Lock the owner before offer state to serialize shared preparation plans.
+            $this->database->fetch("SELECT id FROM users WHERE id = ? FOR UPDATE", $userId);
             if (!$this->database->fetchField(
                 'SELECT id FROM opportunities WHERE id = ? AND archived_at IS NULL FOR SHARE',
                 $opportunityId,
@@ -164,6 +168,15 @@ final class OpportunityDecisionService
                 'actor_type' => $actorType,
                 'delegation_id' => $delegationId,
             ]);
+
+            if ($decision === OpportunityDecision::React && $previous !== OpportunityDecision::React
+                && in_array($this->database->fetchField(
+                    'SELECT workflow_status FROM user_opportunity_state WHERE user_id = ? AND opportunity_id = ?',
+                    $userId, $opportunityId,
+                ), ['none', 'preparing'], true)) {
+                $this->actionItems->create($userId, null, 'prepare_applications', 'Připravit reakce na nabídky v JobRadaru',
+                    'V JobRadaru otevři nabídky K reakci. V soukromém pracovním projektu připrav reakce na nabídky, které ještě nejsou připravené, a předlož je ke schválení. Aktuální výběr zůstává v JobRadaru. Dokončení úkolu nic neodesílá ani nemění stav žádostí.', origin: 'system');
+            }
 
             return new DecisionResult($previous, $decision, $newLockVersion, true);
         });

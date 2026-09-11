@@ -18,6 +18,8 @@ For nonempty `source.search_plan.steps`, follow [search-steps.md](search-steps.m
 
 ## Traverse a source
 
+Before saving any generated translation, summary, assessment, reason or checkpoint, read it as prose and check spaces between words, after punctuation and between numbers and units. Never remove spaces to shorten a payload. Keep URLs, identifiers and technology names intact. Preserve original source text verbatim; do not silently repair it. Shorten wording when needed, not whitespace.
+
 1. Start the source with an accurate description, filters and date horizon. Every mutation has `source_id`, a unique stable `idempotency_key` (16–200 characters), and `payload`. Reuse exactly the same key AND data when retrying a lost response. Never recycle a key for new content.
 2. Open the assigned source URL in Chrome. Apply only saved filters and query. Read actual visible listing, pagination and detail links. Stop at the saved result limit/date boundary or proven end of results. Never assume a fixed CSS selector still works. See [navigation.md](navigation.md).
 3. Login/MFA/CAPTCHA/terms gate: do not enter or extract credentials, cookies, MFA codes or password-manager contents; do not accept terms. Finish this source `waiting_for_login` with the specific observed reason and unknown counts left null. Continue other assigned sources. Resume only after an explicit user resume request and recheck access.

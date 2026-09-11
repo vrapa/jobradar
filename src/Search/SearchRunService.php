@@ -14,6 +14,7 @@ final class SearchRunService
         private readonly Connection $database,
         private readonly AuditLogger $auditLogger,
         private readonly SearchStepService $steps,
+        private readonly \App\Action\ActionItemService $actionItems,
     ) {
     }
 
@@ -84,6 +85,7 @@ final class SearchRunService
             ], 'WHERE id = ?', $runSource['id']);
             $this->updateAccessState($sourceId, (int) $request['runner_device_id'], $result, $now);
             $this->advanceRequest($requestId, (int) $runSource['search_run_id'], $now);
+            $this->actionItems->reviewFinishedRun((int) $runSource['search_run_id']);
             $this->auditLogger->record('search.source_finished', null, [
                 'search_request_id' => $requestId,
                 'search_run_id' => (int) $runSource['search_run_id'],

@@ -1,5 +1,13 @@
 # JobRadar – kompletní implementační plán
 
+## Čitelnost ukládaných textů
+
+Generovaná shrnutí, překlady, posouzení a provozní poznámky musejí obsahovat běžné mezery mezi slovy, za interpunkcí a mezi čísly a jednotkami. MCP a pokyny vykonavatele vyžadují kontrolu čitelnosti před zápisem; zkracování textu nesmí odstraňovat mezery. Originální zdrojový text, URL a identifikátory se automaticky nepřepisují. Jazyková oprava uloženého odvozeného textu zachovává význam a původní znění v soukromém databázovém auditu; nejde o nové ověření nabídky ani změnu rozhodnutí.
+
+## Ochrana práv runtime adresáře
+
+Konzolový bootstrap na systémech s POSIX odmítá efektivní UID 0 ještě před načtením konfigurace a vytvořením cache. Servisní příkazy v Dockeru se spouštějí jako `www-data` (`docker compose exec --user www-data web ...`), aby sdílené runtime soubory zůstaly přístupné webu. Pojistka se vztahuje i na administrativní provisioning přes `bootConsole()`. Webový bootstrap se nemění; Windows bez POSIX kontrolu UID nepoužívá. Již poškozené vlastnictví musí správce opravit samostatně na ověřeném runtime adresáři, aplikace sama práva plošně neuvolňuje.
+
 ### Příprava, odeslání a čekání na odpověď (9. 9. 2026)
 
 Migrace `016_application_workflow.sql` zavádí auditované idempotentní události reakce. `prepared` znamená `awaiting_approval`; `submitted` pouze eviduje skutečně doložené schválené odeslání a nastaví `awaiting_response`. Vyžaduje potvrzení, odkaz na schválení, skutečný čas, kanál a zvolený termín kontroly odpovědi. Nic neposílá. Atomicky dokončí výslovně vybrané přípravné úkoly a založí jeden `follow_up`. Opakování stejného klíče vrátí původní výsledek; jiný obsah, zastaralá verze nebo nepovolený přechod se odmítnou. `response_received` a `closed` ukončí jen vlastní připomínku vytvořenou při odeslání. Rozhodnutí nabídky zůstává zachováno.
@@ -446,6 +454,10 @@ Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:writ
 
 ## 15. Todoist
 
+Po ukončení běhu jako `complete` nebo `partial` vzniká vlastníku požadavku souhrnný `review_opportunities` „Posoudit nové nabídky v JobRadaru“, pokud běh skutečně importoval alespoň jednu novou, nearchivovanou a dosud nerozhodnutou nabídku. Rozhoduje `search_run_opportunities.processing_result = created`, nikoli hlášené počty; aktualizace a duplicity úkol nezakládají. Otevřený souhrn se sdílí mezi běhy jednoho vlastníka a tvorba je serializovaná zámkem vlastníka. Migrace 018 eviduje jednorázové zpracování běhu, aby replay ani po dokončení úkolu nevytvořil kopii. Pozdější nový běh může po uzavření souhrnu založit další. Rozběhnuté kontroly a čekání na přihlášení se dosud nevyhodnocují; historické kontroly se zpětně nezpracovávají.
+
+Souhrn nemá vazbu na jednu nabídku ani vymyšlený termín. API akčních položek vrací `action_url`, pro souhrn odkaz na `/?decision=undecided` odvozený z `APP_URL`. Synchronizace jej směruje do rozhodovací sekce nakonfigurovaného Todoist projektu a zachovává marker `JobRadar action_item:<id>`. Výpadek Todoistu ponechá lokální položku čekat na další synchronizaci. Dokončení souhrnu nemění rozhodnutí, stav žádosti ani neodesílá reakci; konkrétní nabídky uživatel rozhoduje v JobRadaru.
+
 Todoist se použije jen pro úkol s konkrétní akcí nebo termínem, například:
 
 - ověřit sazbu či remote podmínky;
@@ -626,3 +638,10 @@ Do Gitu nepatří osobní profil, sazby, seznam používaných portálů, hledac
 Migrace 010 a 012 obsahují pouze schéma, bez osobních seedů a přepisování dotazů. Existující instalace evidují migrace podle názvu, nikoli checksumu; již aplikované soubory se znovu nespouštějí. Uložené zdroje, verze dotazů, nabídky a rozhodnutí se nemění. Nové instalace konfigurují vlastní zdroje přes soukromý import; testy vytvářejí vlastní syntetická data.
 
 Před commitem spusťte `python scripts/privacy-check.py --staged`, před publikací `python scripts/privacy-check.py --history`. Automatická kontrola nenahrazuje významovou kontrolu obsahu. Podrobnosti: [hranice soukromého kontextu](context-boundary.md).
+
+
+## Společný plán přípravy reakcí
+
+Přechod rozhodnutí na `react` ve stavu `none` nebo `preparing` atomicky zajistí jeden otevřený `prepare_applications` na vlastníka. Ruční i delegované rozhodování používá stejnou službu. Zámek vlastníka před zámkem rozhodnutí serializuje souběžné volby; existující otevřený plán se vrací beze změn. Opakování stejného rozhodnutí ani změna poznámky po dokončení plánu nevytváří kopii. Nový přechod jiné či znovu vybrané nabídky může po uzavření založit nový plán. Již připravené, odeslané a uzavřené žádosti jej nezakládají. Migrace 019 rozšiřuje povolené typy bez zpětného zpracování historických rozhodnutí.
+
+Plán má nulové opportunity_id, žádný automatický termín a action_url na `/nabidky/k-reakci`. Todoist jej přenáší do sekce přípravy reakcí; deduplikuje marker i společný název a odkaz. Výběr nabídek se čte živě z JobRadaru. Dokončení plánu nemění rozhodnutí ani stav žádostí; neuzavírá se automaticky při odeslání jedné nabídky.

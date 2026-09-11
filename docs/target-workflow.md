@@ -8,7 +8,7 @@ Databáze JobRadaru je jediným zdrojem pravdy pro nabídky, zdroje, skutečné 
 
 Soukromý projekt uchovává dlouhodobý soukromý profil, CV, komunikační pravidla, šablony, vytvořené dokumenty, podklady k pohovorům a dočasně historické Markdownové účtenky již odeslaných žádostí. Tyto soubory nejsou operativní fronta. Po ověřené migraci zůstávají historickým archivem; novější stav se čte z JobRadaru.
 
-Todoist obsahuje pouze konkrétní proveditelný krok nebo termín. Každý pracovní Todoist úkol musí mít odpovídající `action_item` v JobRadaru a po vytvoření se k němu uloží provider, externí ID a URL. Samotné `Reagovat` úkol nevytváří.
+Todoist obsahuje pouze konkrétní proveditelný krok nebo termín. Každý pracovní Todoist úkol musí mít odpovídající `action_item` v JobRadaru a po vytvoření se k němu uloží provider, externí ID a URL. Přechod na `Reagovat` u dosud nepřipravené žádosti zajistí jeden společný otevřený `prepare_applications` pro vlastníka. Další vybrané nabídky sdílejí tento krok; synchronizace jej přenese do Todoistu bez duplicit.
 
 ## Tok kontroly zdrojů
 
