@@ -59,11 +59,8 @@ class Executor:
 
     def renew(self):
         with self.lock:
+            self.expire_local_limits()
             if self.lease is None or self.finished:
-                return
-            if self.clock() - self.last_activity > 600 or self.clock() - self.claimed_at > 3600:
-                self.failure = "Execution activity limit reached; stop Chrome and recover on the next authorized wake."
-                self.lease = None
                 return
             try:
                 self.api({"operation": "renew", "run_id": self.lease["run_id"], "lease_token": self.lease["lease_token"]})
@@ -71,11 +68,17 @@ class Executor:
                 self.failure = "Lease renewal failed; stop external work. Stored checkpoints remain available."
                 self.lease = None
 
+    def expire_local_limits(self):
+        if self.lease and not self.finished and (self.clock() - self.last_activity > 600 or self.clock() - self.claimed_at > 3600):
+            self.failure = "Execution activity limit reached; stop Chrome and recover on the next authorized wake."
+            self.lease = None
+
     def call(self, args):
         with self.lock:
             if not isinstance(args, dict) or set(args) - {"operation", "source_id", "idempotency_key", "payload"}:
                 raise RuntimeError("Invalid execution arguments")
             operation = args.get("operation")
+            self.expire_local_limits()
             if operation == "status":
                 return {**self.api({"operation": "status"}), "active_run_id": self.lease["run_id"] if self.lease and not self.finished else None, "failure": self.failure}
             if operation == "claim":
@@ -87,19 +90,27 @@ class Executor:
                 self.finished = False
                 self.last_activity = self.claimed_at = self.clock()
                 return {"lease": {k: v for k, v in self.lease.items() if k != "lease_token"} if self.lease else None}
-            if operation not in ("task", "prepare_access", "start", "checkpoint", "import", "assessment", "finish"):
+            if operation not in ("verify", "task", "prepare_access", "start", "checkpoint", "pause", "import", "assessment", "finish"):
                 raise RuntimeError("Unknown operation")
             if not self.lease:
                 raise RuntimeError(self.failure or "No run owned by this MCP session")
             self.last_activity = self.clock()
-            result = self.api({**args, "run_id": self.lease["run_id"], "lease_token": self.lease["lease_token"]})
+            try:
+                result = self.api({**args, "run_id": self.lease["run_id"], "lease_token": self.lease["lease_token"]})
+            except RuntimeError:
+                if operation == "verify":
+                    self.failure = "Lease verification failed; stop external work."
+                    self.lease = None
+                raise
+            if operation == "pause" and result.get("paused"):
+                self.finished = True
             if operation in ("finish", "prepare_access") and result.get("request_status") in ("complete", "partial", "cancelled", "waiting_for_login", "error"):
                 self.finished = True  # Retain receipt for idempotent terminal retry, but stop renewal.
             return result
 
 
 SCHEMA = {"type": "object", "additionalProperties": False, "required": ["operation"], "properties": {
-    "operation": {"type": "string", "enum": ["status", "claim", "task", "prepare_access", "start", "checkpoint", "import", "assessment", "finish"]},
+    "operation": {"type": "string", "enum": ["status", "claim", "verify", "task", "prepare_access", "start", "checkpoint", "pause", "import", "assessment", "finish"]},
     "source_id": {"type": "integer", "minimum": 1},
     "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 200},
     "payload": {"type": "object"}}}

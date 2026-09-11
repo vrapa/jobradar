@@ -117,6 +117,44 @@ final class ExecutionServiceTest extends TestCase
                 self::assertSame($ids[0], (int) $queries->unresolvedSources($user)[0]['id']);
                 self::assertCount(0, $queries->unresolvedSources($user + 1000000));
                 self::assertSame($device, $execution->execute($identity, ['operation' => 'status'])['device_id']);
+                // One category entry can link multiple details. Pause must preserve both
+                // counters and resume the same run without emitting a review summary.
+                $db->query('UPDATE source_search_definitions SET active = 0 WHERE source_id = ?', $ids[1]);
+                $db->query('INSERT INTO source_search_definitions', ['source_id' => $ids[1], 'name' => 'Synthetic category', 'version' => 2, 'query_text' => 'Synthetic alerts', 'filters_json' => '{}', 'pagination_strategy' => 'pages', 'result_limit' => 3, 'steps_json' => json_encode([['key' => 'alerts', 'name' => 'Alerts', 'mode' => 'category', 'query' => 'Synthetic alerts', 'filters' => [], 'limit' => 3]], JSON_THROW_ON_ERROR), 'active' => true, 'created_at' => $now]);
+                $categoryRequest = $requests->request($user, [$ids[1]], 'category-request-' . $unique);
+                $categoryLease = $execution->execute($identity, ['operation' => 'claim'])['lease'];
+                $categoryBase = ['run_id' => $categoryLease['run_id'], 'lease_token' => $categoryLease['lease_token'], 'source_id' => $ids[1]];
+                $execution->execute($identity, [...$start, ...$categoryBase, 'idempotency_key' => 'category-start-' . $unique]);
+                $categoryCheckpoint = ['completed_unit' => 'Synthetic alert one', 'step_key' => 'alerts', 'step_status' => 'running', 'step_displayed_count' => 1, 'step_related_count' => 0, 'detail_opened_count' => 0];
+                $execution->execute($identity, ['operation' => 'checkpoint', ...$categoryBase, 'idempotency_key' => 'category-init-' . $unique, 'payload' => $categoryCheckpoint]);
+                for ($i = 0; $i < 2; $i++) {
+                    $execution->execute($identity, ['operation' => 'import', ...$categoryBase, 'idempotency_key' => 'category-import-' . $i . $unique, 'payload' => ['url' => 'https://example.test/' . $unique . '/category/' . $i, 'originalTitle' => 'Synthetic linked detail', 'originalText' => 'Synthetic content.', 'searchStep' => 'alerts']]);
+                }
+                $categoryCheckpoint['step_related_count'] = 2;
+                $categoryCheckpoint['detail_opened_count'] = 2;
+                $pause = ['operation' => 'pause', ...$categoryBase, 'idempotency_key' => 'category-pause-' . $unique, 'payload' => $categoryCheckpoint];
+                self::rejects(fn () => $execution->execute($identity, [...$pause, 'payload' => [...$categoryCheckpoint, 'step_related_count' => 1]]));
+                self::assertTrue($execution->execute($identity, $pause)['paused']);
+                self::assertTrue($execution->execute($identity, $pause)['paused']);
+                self::assertSame('running', $db->fetchField('SELECT request_status FROM search_requests WHERE id = ?', $categoryRequest->requestId));
+                self::assertNull($db->fetchField('SELECT review_action_processed_at FROM search_runs WHERE id = ?', $categoryBase['run_id']));
+                self::rejects(fn () => $execution->execute($identity, ['operation' => 'verify', ...$categoryBase]));
+                $resumed = $execution->execute($identity, ['operation' => 'claim'])['lease'];
+                self::assertSame($categoryBase['run_id'], $resumed['run_id']);
+                self::assertNotSame($categoryBase['lease_token'], $resumed['lease_token']);
+                $categoryBase['lease_token'] = $resumed['lease_token'];
+                self::assertTrue($execution->execute($identity, ['operation' => 'verify', ...$categoryBase])['lease_valid']);
+                $resumedTask = $execution->execute($identity, ['operation' => 'task', ...$categoryBase]);
+                self::assertCount(2, $resumedTask['imported_opportunities']);
+                self::assertSame(2, $resumedTask['sources'][0]['search_plan']['steps'][0]['checkpoint']['step_related_count']);
+                $execution->execute($identity, [...$start, ...$categoryBase, 'idempotency_key' => 'category-resume-' . $unique]);
+                $duplicate = $execution->execute($identity, ['operation' => 'import', ...$categoryBase, 'idempotency_key' => 'category-dedup-' . $unique, 'payload' => ['url' => 'https://example.test/' . $unique . '/category/0', 'originalTitle' => 'Synthetic linked detail', 'originalText' => 'Synthetic content.', 'searchStep' => 'alerts']]);
+                self::assertFalse($duplicate['opportunity_created']);
+                self::assertFalse($duplicate['version_created']);
+                self::assertCount(2, $execution->execute($identity, ['operation' => 'task', ...$categoryBase])['imported_opportunities']);
+                $execution->execute($identity, ['operation' => 'checkpoint', ...$categoryBase, 'idempotency_key' => 'category-end-' . $unique, 'payload' => [...$categoryCheckpoint, 'step_status' => 'complete', 'step_completion_reason' => 'end_of_results']]);
+                self::assertSame('complete', $execution->execute($identity, ['operation' => 'finish', ...$categoryBase, 'idempotency_key' => 'category-finish-' . $unique, 'payload' => ['status' => 'complete', 'pages_traversed' => 1, 'displayed_count' => 1, 'detail_opened_count' => 2, 'stored_count' => 2, 'updated_count' => 0, 'duplicate_count' => 0, 'rejected_count' => 0]])['request_status']);
+                self::assertNotNull($db->fetchField('SELECT review_action_processed_at FROM search_runs WHERE id = ?', $categoryBase['run_id']));
                 throw new \DomainException('rollback-synthetic-execution');
             });
         } catch (\DomainException $exception) {

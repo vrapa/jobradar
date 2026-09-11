@@ -40,7 +40,7 @@ final class SearchStepService
     {
         $plan = $this->state($runSource);
         if ($plan['steps'] === []) {
-            if (isset($payload['step_key']) || isset($payload['step_status']) || isset($payload['step_displayed_count']) || isset($payload['step_completion_reason'])) { throw new \InvalidArgumentException('Původní zadání nemá vyhledávací kroky.'); }
+            if (isset($payload['step_key']) || isset($payload['step_status']) || isset($payload['step_displayed_count']) || isset($payload['step_related_count']) || isset($payload['step_completion_reason'])) { throw new \InvalidArgumentException('Původní zadání nemá vyhledávací kroky.'); }
             return;
         }
         $current = null;
@@ -56,7 +56,15 @@ final class SearchStepService
         $total = array_sum(array_column($plan['steps'], 'displayed_count')) - $current['displayed_count'] + $count;
         if ($total > $plan['limit']) { throw new \InvalidArgumentException('Překročen společný limit zdroje.'); }
         $imports = (int) $this->db->fetchField('SELECT COUNT(*) FROM search_step_opportunities so JOIN search_run_steps st ON st.id=so.step_id WHERE st.search_run_source_id=? AND st.step_key=?', $runSource, $current['key']);
-        if ($count < $imports) { throw new \InvalidArgumentException('Počet zobrazených výsledků nesmí být menší než počet importovaných detailů.'); }
+        if ($current['mode'] === 'category') {
+            $related = $payload['step_related_count'] ?? null;
+            $previous = $current['checkpoint']['step_related_count'] ?? 0;
+            if (!is_int($related) || $related < max($previous, $imports) || $related > $plan['limit']) {
+                throw new \InvalidArgumentException('Kategorie vyžaduje samostatný kumulativní počet souvisejících výsledků v limitu zdroje.');
+            }
+        } elseif ($count < $imports || isset($payload['step_related_count'])) {
+            throw new \InvalidArgumentException('Počet výsledků neodpovídá importům nebo režimu kroku.');
+        }
         $reason = $payload['step_completion_reason'] ?? null;
         if ($status === 'complete' && !($reason === 'end_of_results' || ($reason === 'step_limit' && $count === $current['limit']) || ($reason === 'source_limit' && $total === $plan['limit']))) {
             throw new \InvalidArgumentException('Dokončení kroku vyžaduje dosažený limit nebo doložený konec výsledků.');
@@ -104,8 +112,13 @@ final class SearchStepService
         $consumed = 0;
         foreach ($plan['steps'] as $step) {
             $imported = (int) $this->db->fetchField('SELECT COUNT(*) FROM search_step_opportunities so JOIN search_run_steps st ON st.id=so.step_id WHERE st.search_run_source_id=? AND st.step_key=?', $runSource, $step['key']);
-            if ($imported > $step['limit']) { throw new \InvalidArgumentException('Překročen limit importů kroku.'); }
-            $consumed += max($step['displayed_count'], $imported);
+            if ($step['mode'] === 'category') {
+                if ($imported > $plan['limit']) { throw new \InvalidArgumentException('Překročen limit souvisejících detailů kategorie.'); }
+                $consumed += $step['displayed_count'];
+            } else {
+                if ($imported > $step['limit']) { throw new \InvalidArgumentException('Překročen limit importů kroku.'); }
+                $consumed += max($step['displayed_count'], $imported);
+            }
         }
         if ($consumed > $plan['limit']) { throw new \InvalidArgumentException('Překročen společný limit importů zdroje.'); }
     }

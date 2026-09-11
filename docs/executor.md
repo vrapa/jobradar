@@ -19,6 +19,12 @@ Oficiální podklad: [MCP konfigurace](https://learn.chatgpt.com/docs/extend/mcp
 
 ## Protokol v1
 
+Operace `verify` před navigací ověří aktuální lease na serveru a vrátí `lease_valid`, ID běhu a expiraci; samotné `status` ověřuje jen dostupnost. Po starém selhání je nutný nový autorizovaný claim a verify, nikoli ignorování chyby.
+
+Operace `pause` přijímá source_id, idempotency klíč a celý checkpoint. Atomicky jej uloží a expiruje lease, ale ponechá požadavek i běh rozpracovaný. Další probuzení převezme tentýž běh standardní obnovou, zachová kroky a importy a nepřepisuje dokončené zdroje. Pause není terminální partial a nezakládá souhrnný Todoist krok. Odpověď lze opakovat pouze se stejným klíčem, obsahem a lease. MCP po pause přestane obnovovat lease. Dávka má nejvýše pět detailů nebo pět minut; checkpoint se ukládá po každém detailu. Bezpečnostní limity 10 minut neaktivity a hodina přidělení zůstávají.
+
+Kategorie evidují zvlášť `step_displayed_count` (oznámení), `step_related_count` (související výsledky) a `detail_opened_count` (otevřené detaily zdroje). Související výsledky mají bezpečnostní strop rovný limitu zdroje pro každý category krok a nečerpají rozpočet pozdějších keyword kroků. Nedokončené odkazované seznamy se nesmějí označit za konec výsledků. Pole je povinné pro category checkpointy; staré chybějící hodnoty se obnovují z důkazů, nikoli nulou.
+
 Vícekrokové definice vyžadují migrace `013_search_plans.sql` a `014_counterparty.sql`. `task.sources[].search_plan` vrací připnuté kroky a společný limit. Vykonavatel dodržuje [protokol kroků](../executor/skills/jobradar-check/search-steps.md): aktuální `step_key`, kumulativní `step_displayed_count`, stav a důvod dokončení; import uvádí `searchStep`. Staré definice pokračují původním protokolem. Nezávislé nepovinné `counterparty` používá doloženou roli protistrany, nikoli odhad podle portálu. Konfiguraci a zavedení popisuje [placené převzetí aplikací](direct-takeover.md).
 
 `POST /api/v1/runner/execution`, Bearer token, JSON objekt s `operation`. MCP nabízí jediný nástroj `execute` s operacemi:

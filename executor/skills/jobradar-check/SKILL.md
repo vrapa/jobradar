@@ -34,4 +34,12 @@ Before saving any generated translation, summary, assessment, reason or checkpoi
 
 ## End
 
+### Bounded batches and safe recovery
+
+Before claim, check that the available execute schema includes `pause` and `verify`. If the host still has the old schema, do not claim or browse; report once that the MCP connection needs reloading. Todoist reconciliation can still run.
+
+Before Chrome navigation after claim/recovery, call `verify` and require `lease_valid=true` for this run. An old lease failure remains binding until a new authorized wake claims and verifies a new lease. Never bypass a UI safety rejection. `status` is connectivity, not proof of ownership.
+
+Process at most five details or five minutes per batch, whichever comes first. Save a checkpoint after each imported and assessed detail, with exact listing position and remaining work inside an alert. Before ending a batch or handling unrelated work, call `pause` with the full current checkpoint while the lease is valid. Pause saves progress atomically and releases the lease without closing the request. Stop Chrome; do not claim again in this wake. The next authorized wake resumes the same request. Do not use terminal partial for routine batch boundaries. Actual access/configuration failures still require truthful waiting/error/partial. Do not report a pause as saved if the API rejected it.
+
 The final source closes or pauses the run in the DB. A terminal finish response may be safely retried with its original key. Do not automatically create retry requests. Summarize only completion, new actionable failure or required login; unchanged waiting stays quiet. The dashboard derives results from DB, not this summary.

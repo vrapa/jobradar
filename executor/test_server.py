@@ -85,6 +85,51 @@ class ExecutorTests(unittest.TestCase):
         self.executor.api = lambda body: self.fail('Preparation must not renew after handoff')
         self.executor.renew()
 
+    def test_pause_stops_renewal_and_new_claim_clears_old_failure(self):
+        self.executor.call({'operation': 'claim'})
+        original_api = self.executor.api
+        self.executor.api = lambda body: {'paused': True, 'request_status': 'running'}
+        args = {'operation': 'pause', 'source_id': 3, 'idempotency_key': 'pause-source-three', 'payload': {'completed_unit': 'Synthetic detail'}}
+        self.assertTrue(self.executor.call(args)['paused'])
+        self.assertTrue(self.executor.finished)
+        self.assertTrue(self.executor.call(args)['paused'])
+        self.executor.api = lambda body: self.fail('Paused lease must not renew')
+        self.executor.renew()
+        self.executor.api = original_api
+        self.executor.failure = 'Old activity limit'
+        self.executor.call({'operation': 'claim'})
+        self.assertIsNone(self.executor.failure)
+        self.assertFalse(self.executor.finished)
+        self.executor.call({'operation': 'verify'})
+        self.assertEqual('verify', self.calls[-1]['operation'])
+
+    def test_failed_verification_stops_external_work(self):
+        self.executor.call({'operation': 'claim'})
+        def reject(body):
+            raise RuntimeError('Lease revoked')
+        self.executor.api = reject
+        with self.assertRaises(RuntimeError):
+            self.executor.call({'operation': 'verify'})
+        self.assertIsNone(self.executor.lease)
+        with self.assertRaises(RuntimeError):
+            self.executor.call({'operation': 'import'})
+
+    def test_verification_cannot_bypass_idle_limit_between_timer_ticks(self):
+        self.executor.call({'operation': 'claim'})
+        self.now += 601
+        with self.assertRaises(RuntimeError):
+            self.executor.call({'operation': 'verify'})
+        self.assertEqual(1, len(self.calls))
+
+    def test_verification_does_not_remove_absolute_time_limit(self):
+        self.executor.call({'operation': 'claim'})
+        for _ in range(6):
+            self.now += 600
+            self.executor.call({'operation': 'verify'})
+        self.now += 1
+        with self.assertRaises(RuntimeError):
+            self.executor.call({'operation': 'verify'})
+
 
 if __name__ == '__main__':
     unittest.main()

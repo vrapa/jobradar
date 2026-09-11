@@ -46,5 +46,6 @@ assert [reply['id'] for reply in replies] == [1, 2, 3], 'Incomplete stdio exchan
 assert replies[0]['result']['serverInfo']['name'] == 'jobradar-executor'
 assert replies[1]['result']['tools'][0]['name'] == 'execute'
 assert 'prepare_access' in replies[1]['result']['tools'][0]['inputSchema']['properties']['operation']['enum'], 'Executor does not support access preparation'
+assert {'pause', 'verify'} <= set(replies[1]['result']['tools'][0]['inputSchema']['properties']['operation']['enum']), 'Executor does not support safe batch recovery'
 assert not replies[2]['result'].get('isError'), 'Execution API status failed'
 print('Configured MCP command: sequential initialize, tools/list and execute(status) passed with stdin open; no search was claimed.')

@@ -1,5 +1,13 @@
 # JobRadar – kompletní implementační plán
 
+## Dávkování kontrol a obnovení přidělení
+
+Vykonávací API podporuje `verify` (serverové ověření aktuálního lease) a idempotentní `pause` (atomické uložení checkpointu a expirace lease). Pozastavení není terminální výsledek: ponechá tentýž požadavek a běh rozpracovaný, se stejným připnutým plánem, importy a kroky. Další autorizované probuzení jej obnoví stávající cestou obnovy; hotové zdroje neopakuje. Stará oprávnění po pause nepovolují nové zápisy. Souhrn rozhodnutí vzniká až při skutečném terminálním dokončení, ne při dávkové pauze. Historické terminální výsledky se nemění.
+
+Vykonavatel pracuje po nejvýše pěti detailech nebo pěti minutách; po každém detailu uloží přesnou pozici. Před navigací po převzetí vyžaduje úspěšné `verify`; samotné status není důkaz vlastnictví. Limity neaktivity ani bezpečnostní zastavení se nevypínají.
+
+U category kroku znamená `step_displayed_count` počet oznámení/položek kategorie a povinný `step_related_count` počet zpracovaných odkazovaných výsledků. Ten je monotónní, nejméně roven počtu importovaných detailů a omezen limitem zdroje pro každý category krok. Odkazované výsledky nečerpají rozpočty pozdějších keyword kroků. Skutečně otevřené detaily se evidují zvlášť; jeden alert může obsahovat více detailů. Při dosažení bezpečnostního stropu s neprohlédnutými výsledky se uvádí částečné pokrytí, ne konec výsledků. Nekategoriální kroky zachovávají původní rozpočty a kontrolu počtu importů. Staré checkpointy bez nového pole se obnovují z doložených dat.
+
 ## Čitelnost ukládaných textů
 
 Generovaná shrnutí, překlady, posouzení a provozní poznámky musejí obsahovat běžné mezery mezi slovy, za interpunkcí a mezi čísly a jednotkami. MCP a pokyny vykonavatele vyžadují kontrolu čitelnosti před zápisem; zkracování textu nesmí odstraňovat mezery. Originální zdrojový text, URL a identifikátory se automaticky nepřepisují. Jazyková oprava uloženého odvozeného textu zachovává význam a původní znění v soukromém databázovém auditu; nejde o nové ověření nabídky ani změnu rozhodnutí.

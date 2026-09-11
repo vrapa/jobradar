@@ -71,11 +71,14 @@ final class ExecutionService
             $valid = $run['lease_token_hash'] !== null
                 && hash_equals((string) $run['lease_token_hash'], hash('sha256', $body['lease_token']))
                 && $run['lease_expires_at'] instanceof \DateTimeInterface && $run['lease_expires_at'] > new \DateTimeImmutable();
-            if (!$valid && in_array($operation, ['renew', 'task'], true)) {
+            if (!$valid && in_array($operation, ['renew', 'verify', 'task'], true)) {
                 throw new \InvalidArgumentException('Lease vypršel nebo byl odvolán.');
             }
             if ($operation === 'renew') {
                 return ['expires_at' => $this->leases->renew($device, (int) $run['search_request_id'], $body['lease_token'])->format(DATE_ATOM)];
+            }
+            if ($operation === 'verify') {
+                return ['lease_valid' => true, 'run_id' => (int) $run['id'], 'expires_at' => $run['lease_expires_at']->format(DATE_ATOM)];
             }
             if ($operation === 'task') {
                 return $this->task($run, $identity);
@@ -102,7 +105,7 @@ final class ExecutionService
             if (!$valid) {
                 throw new \InvalidArgumentException('Lease vypršel nebo byl odvolán.');
             }
-            if (!in_array($operation, ['prepare_access', 'start', 'finish', 'checkpoint', 'import', 'assessment'], true)) {
+            if (!in_array($operation, ['prepare_access', 'start', 'finish', 'checkpoint', 'pause', 'import', 'assessment'], true)) {
                 throw new \InvalidArgumentException('Neznámá vykonávací operace.');
             }
             $preparing = (bool) $run['prepare_access'] && $run['access_confirmed_at'] === null;
@@ -141,6 +144,7 @@ final class ExecutionService
             $result = match ($operation) {
                 'start', 'finish' => $this->recordProgress($body, $payload),
                 'checkpoint' => $this->checkpoint($source, $payload),
+                'pause' => $this->pause($source, $run, $payload),
                 'import' => $this->import($source, $payload, $identity),
                 'assessment' => $this->assessment($source, $payload, $run),
             };
@@ -207,7 +211,7 @@ final class ExecutionService
      */
     private function checkpoint(Row $source, array $payload): array
     {
-        if (array_diff(array_keys($payload), ['url', 'page', 'completed_unit', 'pages_traversed', 'detail_opened_count', 'step_key', 'step_status', 'step_displayed_count', 'step_completion_reason']) !== []
+        if (array_diff(array_keys($payload), ['url', 'page', 'completed_unit', 'pages_traversed', 'detail_opened_count', 'step_key', 'step_status', 'step_displayed_count', 'step_related_count', 'step_completion_reason']) !== []
             || !is_string($payload['completed_unit'] ?? null) || trim($payload['completed_unit']) === '' || strlen($payload['completed_unit']) > 2000) {
             throw new \InvalidArgumentException('Checkpoint vyžaduje stručnou dokončenou jednotku a známá pole.');
         }
@@ -229,6 +233,19 @@ final class ExecutionService
         $this->steps->checkpoint((int) $source['id'], $payload);
         $this->database->query('UPDATE search_run_sources SET checkpoint_json = ?, checkpoint_at = ? WHERE id = ?', json_encode($payload, JSON_THROW_ON_ERROR), new \DateTimeImmutable(), $source['id']);
         return ['checkpoint_saved' => true];
+    }
+
+    /** Save progress and release this lease without closing or creating a request.
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function pause(Row $source, Row $run, array $payload): array
+    {
+        $this->checkpoint($source, $payload);
+        // Keep running + expired lease so the existing recovery path claims this same run.
+        // The hash is retained solely for idempotent receipt retries; it is no longer valid.
+        $this->database->query('UPDATE search_requests SET lease_expires_at = ? WHERE id = ?', new \DateTimeImmutable('-1 second'), $run['search_request_id']);
+        return ['paused' => true, 'checkpoint_saved' => true, 'request_status' => 'running', 'run_id' => (int) $run['id']];
     }
 
     /**
