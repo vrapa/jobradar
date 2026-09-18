@@ -11,7 +11,7 @@ final class AcknowledgeActionItemHandler extends BaseHandler
 {
     public function __construct(private readonly ApiRequestContext $context, private readonly ActionItemService $actions) { parent::__construct(); }
     public function tags(): array { return ['action-items']; }
-    public function params(): array { return [(new JsonInputParam('body', '{"type":"object","additionalProperties":false,"required":["action_item_id","status"],"properties":{"action_item_id":{"type":"integer","minimum":1},"status":{"type":"string","enum":["open","completed","cancelled"]}}'))->setRequired()]; }
+    public function params(): array { return [(new JsonInputParam('body', '{"type":"object","additionalProperties":false,"required":["action_item_id","status"],"properties":{"action_item_id":{"type":"integer","minimum":1},"status":{"type":"string","enum":["open","completed","cancelled"]}}}'))->setRequired()]; }
     /** @param array<string,mixed> $params */
     public function handle(array $params): ResponseInterface
     {
