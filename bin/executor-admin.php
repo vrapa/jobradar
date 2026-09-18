@@ -56,17 +56,50 @@ if ($mode === 'import-config' && isset($argv[2])) {
             if (!$url || !isset($url['host']) || !in_array($url['scheme'] ?? '', ['http', 'https'], true) || isset($url['user']) || isset($url['pass']) || !in_array($source['priority'], ['A', 'B', 'C'], true) || !is_int($source['limit']) || $source['limit'] < 1 || $source['limit'] > 100) {
                 throw new InvalidArgumentException('Invalid source configuration.');
             }
+            $tagsProvided = array_key_exists('purpose_tags', $source);
+            $tags = $source['purpose_tags'] ?? [];
+            if (!is_array($tags) || !array_is_list($tags) || array_any($tags, static fn ($tag): bool => !is_string($tag)) || array_diff($tags, array_keys(App\Search\SearchPlan::TAGS)) !== []) {
+                throw new InvalidArgumentException('Invalid source purpose tags.');
+            }
+            $steps = null;
+            if (array_key_exists('steps', $source)) {
+                $steps = App\Search\SearchPlan::parse(json_encode($source['steps'], JSON_THROW_ON_ERROR), $source['limit']);
+            }
+            $query = $steps[0]['query'] ?? ($source['query'] ?? null);
+            $filters = $steps[0]['filters'] ?? ($source['filters'] ?? null);
+            if (!is_string($query) || trim($query) === '' || !is_array($filters) || ($filters !== [] && array_is_list($filters))) {
+                throw new InvalidArgumentException('A source requires a query and filter object, directly or in steps.');
+            }
+            $guidance = $source['review_guidance'] ?? null;
+            if ($guidance !== null && (!is_string($guidance) || mb_strlen($guidance) > 10000)) {
+                throw new InvalidArgumentException('Invalid review guidance.');
+            }
+            $verification = $source['verification'] ?? null;
+            if ($steps !== null && (!is_string($verification) || trim($verification) === '' || mb_strlen($verification) > 2000)) {
+                throw new InvalidArgumentException('Planned searches require verification of supported queries and filters.');
+            }
             $existing = $db->fetch('SELECT id, url FROM sources WHERE name = ?', $source['name']);
             if ($existing !== null && $existing['url'] !== $source['url']) {
                 throw new InvalidArgumentException('Existing source has another URL; review instead of overwriting.');
             }
             $now = new DateTimeImmutable();
             if ($existing === null) {
-                $db->query('INSERT INTO sources', ['name' => $source['name'], 'url' => $source['url'], 'source_type' => 'browser', 'priority' => $source['priority'], 'active' => true, 'access_requirement' => 'unknown', 'adapter_capabilities' => '{"executor":"codex-chrome","protocol":1}', 'created_at' => $now, 'updated_at' => $now]);
+                $db->query('INSERT INTO sources', ['name' => $source['name'], 'url' => $source['url'], 'source_type' => 'browser', 'priority' => $source['priority'], 'purpose_tags_json' => json_encode(array_values(array_unique($tags)), JSON_THROW_ON_ERROR), 'active' => true, 'access_requirement' => 'unknown', 'adapter_capabilities' => '{"executor":"codex-chrome","protocol":1}', 'created_at' => $now, 'updated_at' => $now]);
                 $sourceId = (int) $db->getInsertId();
-            } else { $sourceId = (int) $existing['id']; }
+            } else {
+                $sourceId = (int) $existing['id'];
+                if ($tagsProvided) {
+                    $db->query('UPDATE sources SET priority=?, purpose_tags_json=?, updated_at=? WHERE id=?', $source['priority'], json_encode(array_values(array_unique($tags)), JSON_THROW_ON_ERROR), $now, $sourceId);
+                } else {
+                    $db->query('UPDATE sources SET priority=?, updated_at=? WHERE id=?', $source['priority'], $now, $sourceId);
+                }
+            }
             if ($db->fetchField('SELECT id FROM source_search_definitions WHERE source_id = ? AND name = ? AND version = ?', $sourceId, $source['definition'], $source['version']) === null) {
-                $db->query('INSERT INTO source_search_definitions', ['source_id' => $sourceId, 'name' => $source['definition'], 'version' => $source['version'], 'query_text' => $source['query'], 'filters_json' => json_encode($source['filters'], JSON_THROW_ON_ERROR), 'pagination_strategy' => 'visible_next_or_end_with_result_limit', 'result_limit' => $source['limit'], 'active' => true, 'created_at' => $now]);
+                $db->query('UPDATE source_search_definitions SET active=0 WHERE source_id=?', $sourceId);
+                $db->query('INSERT INTO source_search_definitions', ['source_id' => $sourceId, 'name' => $source['definition'], 'version' => $source['version'], 'query_text' => trim($query), 'filters_json' => json_encode($filters, JSON_THROW_ON_ERROR), 'steps_json' => $steps === null ? null : json_encode($steps, JSON_THROW_ON_ERROR), 'pagination_strategy' => 'visible_next_or_end_with_result_limit', 'result_limit' => $source['limit'], 'review_guidance' => $guidance, 'active' => true, 'created_at' => $now]);
+                if ($steps !== null) {
+                    $container->getByType(App\Infrastructure\AuditLogger::class)->record('source.plan_imported', $owner, ['source_id' => $sourceId, 'definition_id' => (int) $db->getInsertId(), 'verification' => trim((string) $verification)]);
+                }
             }
             $sourceIds[] = $sourceId;
         }

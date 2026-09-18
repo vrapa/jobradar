@@ -117,7 +117,7 @@ První verze nebude sama bez pokynu pravidelně hledat. Uživatel vždy vytvoř�
 
 Profil a hodnoticí pravidla jsou verzované soukromé záznamy v databázi. Produkt nemá výchozí osobní profil ani konkrétní finanční, jazykové či geografické preference. Konfigurace může obsahovat ověřenou praxi, technologie, dostupnost, pracovní dobu, místo, jazyky, způsob spolupráce, sazby a vyřazovací podmínky. Každé pravidlo má původ a platnost; preference není ověřený profesní fakt.
 
-Import přes `assessment:import-config` nebo správní `executor-admin.php import-config` načítá soukromý soubor mimo verzování. Veřejné fixtures jsou syntetické. Chybějící údaj není překážka ani shoda: vytvoří otázku k ověření a sníží pokrytí hodnocení.
+Import přes `assessment:import-config` nebo správní `executor-admin.php import-config` načítá soukromý soubor mimo verzování. Správní import zdrojů podporuje také účelové štítky a verzovaný `SearchPlan`; plán vyžaduje neveřejné doložení podporovaných dotazů a filtrů, při aktivaci nové verze zachová historii a nespustí hledání. Veřejné fixtures jsou syntetické. Chybějící údaj není překážka ani shoda: vytvoří otázku k ověření a sníží pokrytí hodnocení.
 
 ## 4. Technická architektura
 
