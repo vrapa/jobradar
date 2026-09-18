@@ -34,7 +34,7 @@ final class ImportOpportunityHandler extends BaseHandler
             'required' => ['url', 'originalTitle', 'originalText'],
             'additionalProperties' => false,
             'properties' => [
-                'url' => ['type' => 'string', 'format' => 'uri'],
+                'url' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 2048],
                 'originalTitle' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 500],
                 'originalText' => ['type' => 'string', 'minLength' => 1],
                 'companyName' => ['type' => ['string', 'null'], 'maxLength' => 255],

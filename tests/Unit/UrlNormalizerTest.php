@@ -35,6 +35,20 @@ final class UrlNormalizerTest extends TestCase
         (new UrlNormalizer())->normalize('javascript:alert(1)');
     }
 
+    public function testAcceptsRestrictedHistoricalIdentifier(): void
+    {
+        self::assertSame(
+            'urn:jobradar:historical:medicodata-dolibarr-rest-api-inquiry',
+            (new UrlNormalizer())->normalize('urn:jobradar:historical:medicodata-dolibarr-rest-api-inquiry'),
+        );
+    }
+
+    public function testRejectsOtherUrnNamespaces(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new UrlNormalizer())->normalize('urn:example:historical:offer');
+    }
+
     public function testRejectsCredentialsInUrl(): void
     {
         $this->expectException(\InvalidArgumentException::class);

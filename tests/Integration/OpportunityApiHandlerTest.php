@@ -13,7 +13,9 @@ use App\Api\V1\SetOpportunityDecisionHandler;
 use App\Bootstrap;
 use Nette\Database\Connection;
 use PHPUnit\Framework\TestCase;
+use Tomaj\NetteApi\Params\JsonInputParam;
 use Tomaj\NetteApi\Response\JsonApiResponse;
+use Tomaj\NetteApi\Validation\JsonSchemaValidator;
 
 final class OpportunityApiHandlerTest extends TestCase
 {
@@ -122,6 +124,73 @@ final class OpportunityApiHandlerTest extends TestCase
                 $database->query('DELETE FROM opportunity_sources WHERE opportunity_id = ?', $opportunityId);
                 $database->query('DELETE FROM opportunities WHERE id = ?', $opportunityId);
                 $database->query('DELETE FROM companies WHERE normalized_name = ?', mb_strtolower($companyName));
+            }
+            if (is_int($userId)) {
+                $database->query('DELETE FROM audit_log WHERE actor_user_id = ?', $userId);
+                $database->query('DELETE FROM users WHERE id = ?', $userId);
+            }
+        }
+    }
+
+    public function testApiImportsRestrictedHistoricalOpportunityIdentifier(): void
+    {
+        if (getenv('DB_HOST') === false) {
+            self::markTestSkipped('Integrační databáze není nakonfigurovaná.');
+        }
+        $container = (new Bootstrap(dirname(__DIR__, 2)))->bootConsole();
+        $database = $container->getByType(Connection::class);
+        $context = $container->getByType(ApiRequestContext::class);
+        $import = $container->getByType(ImportOpportunityHandler::class);
+        $unique = bin2hex(random_bytes(8));
+        $userId = $opportunityId = null;
+
+        try {
+            $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            $database->query('INSERT INTO users', [
+                'email' => 'historical-' . $unique . '@example.test',
+                'display_name' => 'Synthetic historical import owner',
+                'password_hash' => password_hash($unique, PASSWORD_DEFAULT),
+                'role' => 'admin',
+                'locale' => 'cs_CZ',
+                'timezone' => 'Europe/Prague',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $userId = (int) $database->getInsertId();
+            $context->authenticate(self::identity($userId));
+
+            $body = [
+                'url' => 'urn:jobradar:historical:synthetic-' . $unique,
+                'originalTitle' => 'Historical API offer',
+                'originalText' => 'Migrated record without a public HTTP URL.',
+            ];
+            $params = $import->params();
+            self::assertCount(1, $params);
+            self::assertInstanceOf(JsonInputParam::class, $params[0]);
+            $schemaInput = json_decode(json_encode($body, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
+            self::assertTrue((new JsonSchemaValidator())->validate($schemaInput, $params[0]->getSchema())->isOk());
+
+            $response = self::json($import->handle(['body' => $body]));
+
+            self::assertSame(201, $response->getCode());
+            $payload = self::payload($response);
+            $opportunityId = $payload['data']['opportunity_id'];
+            self::assertIsInt($opportunityId);
+            self::assertSame(
+                'urn:jobradar:historical:synthetic-' . $unique,
+                $database->fetchField('SELECT canonical_url FROM opportunities WHERE id = ?', $opportunityId),
+            );
+        } finally {
+            $context->clear();
+            if (is_int($opportunityId)) {
+                $database->query(
+                    "DELETE FROM audit_log WHERE JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.opportunity_id')) = ?",
+                    (string) $opportunityId,
+                );
+                $database->query('UPDATE opportunities SET current_source_version_id = NULL WHERE id = ?', $opportunityId);
+                $database->query('DELETE FROM source_versions WHERE opportunity_id = ?', $opportunityId);
+                $database->query('DELETE FROM opportunity_sources WHERE opportunity_id = ?', $opportunityId);
+                $database->query('DELETE FROM opportunities WHERE id = ?', $opportunityId);
             }
             if (is_int($userId)) {
                 $database->query('DELETE FROM audit_log WHERE actor_user_id = ?', $userId);

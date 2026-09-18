@@ -721,7 +721,11 @@ components:
       additionalProperties: false
       required: [url, originalTitle, originalText]
       properties:
-        url: { type: string, format: uri }
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: HTTP(S) canonical URL or restricted migrated identifier urn:jobradar:historical:<slug>.
         originalTitle: { type: string, minLength: 1, maxLength: 500 }
         originalText: { type: string, minLength: 1 }
         companyName: { type: [string, 'null'], maxLength: 255 }

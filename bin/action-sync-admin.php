@@ -15,8 +15,8 @@ if (!is_int($ownerId) || $ownerId < 1 || !$database->fetchField("SELECT 1 FROM u
 
 $mode = $argv[1] ?? 'status';
 $applications = getenv('JOBRADAR_APPLICATION_WORKFLOW') === '1';
-$clientName = $applications ? 'Application workflow' : 'Todoist action sync';
-$scopes = $applications ? ['applications:write', 'opportunities:read', 'action_items:read'] : ['action_items:read', 'action_items:write'];
+$clientName = App\Api\Auth\ActionIntegrationProfile::clientName($applications);
+$scopes = App\Api\Auth\ActionIntegrationProfile::scopes($applications);
 if ($mode === 'status') {
     echo json_encode(array_map(static fn ($row): array => (array) $row, $database->fetchAll(
         "SELECT client.id AS client_id, client.public_identifier, token.id AS token_id, token.scopes_json, token.expires_at, token.revoked_at
@@ -37,6 +37,38 @@ if ($mode === 'revoke' && isset($argv[2])) {
     }
     $credentials->revokeToken($ownerId, $tokenId);
     echo "Todoist action sync token revoked; action items and external links preserved.\n";
+    exit(0);
+}
+
+if ($mode === 'rotate') {
+    $result = $database->transaction(function () use ($database, $credentials, $ownerId, $clientName, $scopes): array {
+        $clientIdValue = $database->fetchField(
+            'SELECT id FROM api_clients WHERE name = ? AND client_type = ? AND created_by_user_id = ? AND revoked_at IS NULL',
+            $clientName,
+            'integration',
+            $ownerId,
+        );
+        if (!is_int($clientIdValue) && !(is_string($clientIdValue) && ctype_digit($clientIdValue))) {
+            throw new RuntimeException('Active integration client was not found; create it before rotating its token.');
+        }
+        $clientId = (int) $clientIdValue;
+        $previousTokenIds = array_map(
+            'intval',
+            $database->fetchPairs(
+                'SELECT id, id FROM api_access_tokens WHERE api_client_id = ? AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP()',
+                $clientId,
+            ),
+        );
+        $token = $credentials->issueToken($ownerId, $clientId, $scopes, new DateTimeImmutable('+90 days'));
+        return [
+            'token_id' => $token->id,
+            'client_id' => $clientId,
+            'token' => $token->token,
+            'expires_at' => $token->expiresAt->format(DATE_ATOM),
+            'previous_token_ids' => $previousTokenIds,
+        ];
+    });
+    echo json_encode($result, JSON_THROW_ON_ERROR) . PHP_EOL;
     exit(0);
 }
 

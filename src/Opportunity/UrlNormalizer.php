@@ -20,9 +20,12 @@ final class UrlNormalizer
         if (mb_strlen($url) > 2048) {
             throw new \InvalidArgumentException('URL smí mít nejvýše 2048 znaků.');
         }
+        if (preg_match('/\Aurn:jobradar:historical:[a-z0-9](?:[a-z0-9-]{0,198}[a-z0-9])?\z/', $url) === 1) {
+            return $url;
+        }
         $parts = parse_url($url);
         if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
-            throw new \InvalidArgumentException('URL nabídky není platná absolutní adresa.');
+            throw new \InvalidArgumentException('URL nabídky není platná absolutní adresa ani podporovaný historický identifikátor.');
         }
         if (isset($parts['user']) || isset($parts['pass'])) {
             throw new \InvalidArgumentException('URL nabídky nesmí obsahovat přihlašovací údaje.');

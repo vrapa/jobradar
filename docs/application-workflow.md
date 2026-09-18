@@ -11,7 +11,7 @@ Připravený text, schválení samotné nebo hotový Todoist úkol nejsou doklad
 
 ## Připojení soukromého projektu
 
-`executor/install-actions.ps1 -OwnerId <ověřený vlastník> -Applications` vydá oddělený odvolatelný klient `jobradar-applications` se scopes `applications:write`, `opportunities:read`, `action_items:read`. Používá stejný verzovaný HTTP transport a samostatný DPAPI soubor `application-workflow-token.xml`. Nikdy nerozšiřuje scopes vykonavatele ani synchronizačního klienta. Hostitel musí nové MCP načíst; registrace sama není důkaz dostupnosti nástroje. Při nedostupnosti záznamového nástroje použij formulář na detailu nabídky a oznam neuložený stav, nikdy nepředstírej úspěch.
+`executor/install-actions.ps1 -OwnerId <ověřený vlastník> -Applications` vydá oddělený odvolatelný klient `jobradar-applications` se scopes `applications:write`, `opportunities:read`, `opportunities:import`, `action_items:read`. Importní scope dovoluje opravit odvozené údaje nabídky přes verzovaný import, ale nemění rozhodnutí ani stav žádosti. Používá stejný verzovaný HTTP transport a samostatný DPAPI soubor `application-workflow-token.xml`. Nikdy nerozšiřuje scopes vykonavatele ani synchronizačního klienta. Existující chráněný token se po změně scopes obnoví příkazem s přepínači `-Applications -RotateCredential`; instalátor nejprve bezpečně uloží nový token a teprve poté odvolá předchozí. Hostitel musí nové MCP načíst; registrace sama není důkaz dostupnosti nástroje. Při nedostupnosti záznamového nástroje použij formulář na detailu nabídky a oznam neuložený stav, nikdy nepředstírej úspěch.
 
 ## Pravidla synchronizace stavů
 
