@@ -94,7 +94,21 @@ if ($mode === 'import-config' && isset($argv[2])) {
                     $db->query('UPDATE sources SET priority=?, updated_at=? WHERE id=?', $source['priority'], $now, $sourceId);
                 }
             }
-            if ($db->fetchField('SELECT id FROM source_search_definitions WHERE source_id = ? AND name = ? AND version = ?', $sourceId, $source['definition'], $source['version']) === null) {
+            $existingDefinition = $db->fetch('SELECT * FROM source_search_definitions WHERE source_id = ? AND name = ? AND version = ?', $sourceId, $source['definition'], $source['version']);
+            if ($existingDefinition !== null) {
+                $storedFilters = json_decode((string) ($existingDefinition['filters_json'] ?? 'null'), true, 32, JSON_THROW_ON_ERROR);
+                $storedSteps = $existingDefinition['steps_json'] === null
+                    ? null
+                    : App\Search\SearchPlan::parse((string) $existingDefinition['steps_json'], (int) $existingDefinition['result_limit']);
+                $sameDefinition = trim((string) $existingDefinition['query_text']) === trim($query)
+                    && $storedFilters == $filters
+                    && $storedSteps == $steps
+                    && (int) $existingDefinition['result_limit'] === $source['limit']
+                    && $existingDefinition['review_guidance'] === $guidance;
+                if (!$sameDefinition) {
+                    throw new InvalidArgumentException('Existing source definition version has different content; create a higher version.');
+                }
+            } else {
                 $db->query('UPDATE source_search_definitions SET active=0 WHERE source_id=?', $sourceId);
                 $db->query('INSERT INTO source_search_definitions', ['source_id' => $sourceId, 'name' => $source['definition'], 'version' => $source['version'], 'query_text' => trim($query), 'filters_json' => json_encode($filters, JSON_THROW_ON_ERROR), 'steps_json' => $steps === null ? null : json_encode($steps, JSON_THROW_ON_ERROR), 'pagination_strategy' => 'visible_next_or_end_with_result_limit', 'result_limit' => $source['limit'], 'review_guidance' => $guidance, 'active' => true, 'created_at' => $now]);
                 if ($steps !== null) {
