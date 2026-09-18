@@ -90,13 +90,15 @@ final class RouterFactory
 
     private static function publishApiId(string $id): string
     {
-        $_GET['id'] = $id;
+        // GetInputParam returns injected values without its usual type conversion.
+        // Keep invalid/overflowing values non-integer so API validation rejects them.
+        $_GET['id'] = filter_var($id, FILTER_VALIDATE_INT) !== false ? (int) $id : $id;
         return $id;
     }
 
     private static function publishApiSourceId(string $sourceId): string
     {
-        $_GET['sourceId'] = $sourceId;
+        $_GET['sourceId'] = filter_var($sourceId, FILTER_VALIDATE_INT) !== false ? (int) $sourceId : $sourceId;
         return $sourceId;
     }
 }

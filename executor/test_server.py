@@ -114,6 +114,27 @@ class ExecutorTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.executor.call({'operation': 'import'})
 
+    def test_recovery_distinguishes_current_failure_from_history(self):
+        self.executor.call({'operation': 'claim'})
+        self.now += 601
+        blocked = self.executor.call({'operation': 'status'})
+        self.assertEqual('blocked', blocked['lease_state'])
+        self.assertEqual(blocked['failure'], blocked['last_failure'])
+        recovered = self.executor.call({'operation': 'claim'})
+        self.assertIsNone(recovered['failure'])
+        self.assertEqual('unverified', recovered['lease_state'])
+        self.assertEqual(blocked['failure'], recovered['last_failure'])
+        self.assertNotIn('secret', json.dumps(recovered))
+
+    def test_partial_ui_block_stops_renewal(self):
+        self.executor.call({'operation': 'claim'})
+        self.executor.api = lambda body: {'request_status': 'partial'}
+        self.executor.call({'operation': 'finish', 'source_id': 3,
+                            'payload': {'status': 'partial', 'error_code': 'ui_safety_blocked',
+                                        'incomplete_reason': 'UI denied navigation.'}})
+        self.executor.api = lambda body: self.fail('Blocked terminal run must not renew')
+        self.executor.renew()
+
     def test_verification_cannot_bypass_idle_limit_between_timer_ticks(self):
         self.executor.call({'operation': 'claim'})
         self.now += 601

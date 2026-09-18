@@ -19,6 +19,10 @@ Oficiální podklad: [MCP konfigurace](https://learn.chatgpt.com/docs/extend/mcp
 
 ## Protokol v1
 
+Vykonavatel odděluje aktuální `failure` od historie `last_failure`; `claim` vrací `lease_state=unverified`. Platnost přidělení dokládá serverové `verify`, nikoli samotné `status`. Ani platný lease nepřebíjí odmítnutí ochrany UI. Nevyřešená blokace UI se s platným lease eviduje přes `finish partial`, kód `ui_safety_blocked`, zachovaný checkpoint a pravdivé počty, nikoli opakované `pause`. Terminální výsledek se automaticky neobnovuje; Todoist pokračuje nezávisle.
+
+Před importem se uplatní [předvýběr](../executor/skills/jobradar-check/pre-import-screening.md). Prokázané tvrdé nesoulady patří do auditovaných checkpointů a počtu odmítnutí, nikoli do databáze nabídek; automaticky otevřený detail není výjimka. Neznámé podmínky se nezaměňují za nesoulad. Osobní omezení vlastníka nejsou součástí repozitáře.
+
 Operace `verify` před navigací ověří aktuální lease na serveru a vrátí `lease_valid`, ID běhu a expiraci; samotné `status` ověřuje jen dostupnost. Po starém selhání je nutný nový autorizovaný claim a verify, nikoli ignorování chyby.
 
 Operace `pause` přijímá source_id, idempotency klíč a celý checkpoint. Atomicky jej uloží a expiruje lease, ale ponechá požadavek i běh rozpracovaný. Další probuzení převezme tentýž běh standardní obnovou, zachová kroky a importy a nepřepisuje dokončené zdroje. Pause není terminální partial a nezakládá souhrnný Todoist krok. Odpověď lze opakovat pouze se stejným klíčem, obsahem a lease. MCP po pause přestane obnovovat lease. Dávka má nejvýše pět detailů nebo pět minut; checkpoint se ukládá po každém detailu. Bezpečnostní limity 10 minut neaktivity a hodina přidělení zůstávají.

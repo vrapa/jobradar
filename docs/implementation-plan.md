@@ -1,5 +1,21 @@
 # JobRadar – kompletní implementační plán
 
+## Návrh rozšíření projektového hledání
+
+[Plán rozšíření a vyhodnocování projektového hledání](opportunity-discovery-plan.md) popisuje postup kontroly soukromé konfigurace, oddělení typů zadání, posouzení obchodní vhodnosti a omezeného srovnávacího pilotu. Nejprve využívá existující verzované kroky a podmínky nabídek; nové klasifikace a reporty se doplňují pouze podle ověřené potřeby. Jde o návrh, nikoli implementované chování. Osobní trhy, dotazy a sazby zůstávají v soukromé konfiguraci. Plán ani jeho uložení nespouští hledání.
+
+## Předvýběr podle doložené praxe a podmínek
+
+Před importem se rozlišuje podstatná shoda hlavního stacku od úplné shody všech technologií. Chybějící doplňková zkušenost se přizná jako otázka k ověření; prokázaný nesplněný nepominutelný požadavek se odmítne. Pravidelná povinná docházka a pracovní jazyk se porovnávají s aktuální soukromou konfigurací vlastníka nezávisle na technické shodě. Osobní omezení zůstávají mimo repozitář a změna předvýběru nemění historické nabídky ani sama nespouští hledání.
+
+## Typování identifikátorů v API URL
+
+Číselné identifikátory z cest API se předávají vstupní validaci jako celá čísla; knihovna u hodnot vložených routerem do `$_GET` vlastní převod neprovádí. Neplatná čísla a hodnoty mimo rozsah se nesmějí tiše oříznout na jiné ID. Regresní test prochází skutečný router a `GetInputParam`, nikoli jen přímé volání handleru. Oprava nemění autorizaci ani vlastnictví dat.
+
+## Blokace vykonavatele versus dávková pauza
+
+Aktuální `failure` se odlišuje od diagnostické historie `last_failure`. Nový claim není důkaz platnosti bez serverového verify. Nevyřešené odmítnutí UI se zaznamená s platným lease jako `finish partial` s kódem `ui_safety_blocked`, zachovaným checkpointem a doloženými počty. Nesmí se maskovat opakovaným start/pause bez průchodu. Další hledání vyžaduje výslovné zadání vlastníka; terminální historie se nepřepisuje. Bezpečnostní limity a ochrana UI zůstávají beze změny.
+
 ## Dávkování kontrol a obnovení přidělení
 
 Vykonávací API podporuje `verify` (serverové ověření aktuálního lease) a idempotentní `pause` (atomické uložení checkpointu a expirace lease). Pozastavení není terminální výsledek: ponechá tentýž požadavek a běh rozpracovaný, se stejným připnutým plánem, importy a kroky. Další autorizované probuzení jej obnoví stávající cestou obnovy; hotové zdroje neopakuje. Stará oprávnění po pause nepovolují nové zápisy. Souhrn rozhodnutí vzniká až při skutečném terminálním dokončení, ne při dávkové pauze. Historické terminální výsledky se nemění.
@@ -330,7 +346,9 @@ Pro každý kandidát platí:
 9. vyhodnotit profil a uložit důkazy pro každý závěr;
 10. propojit nabídku s konkrétním během a výsledkem zdroje.
 
-Každý úplný detail otevřený při hledání se uloží alespoň v minimální podobě i při zamítnutí: originální a český titul, URL, datum, důvod a dostupný text. To dovolí nabídky po změně pravidel znovu posoudit.
+Před otevřením detailu a znovu před importem proběhne předvýběr podle doložených tvrdých omezení vlastníka. Jasně nesouvisející povinný hlavní stack, neslučitelná povinná docházka nebo povinný nezvládnutelný pracovní jazyk znamenají neimportovat. Platí to i pro automaticky otevřený detail. Odmítnutí se eviduje pouze v checkpointu kontroly: veřejný identifikátor, pozice, stručný důkaz, důvod, skutečné otevření detailu a kumulativní počet odmítnutí. Historie vykonávacích událostí zachovává předchozí checkpointy; odmítnuté pozice dál čerpají příslušný limit. Nevzniká nabídka, posouzení ani navazující úkol.
+
+Samotné zahraniční sídlo, jazyk inzerátu, volitelný nový framework nebo neznámé podmínky nejsou doloženou překážkou. Technicky relevantní kandidát bez prokázaného tvrdého nesouladu se uloží s originálem, českým překladem a nejasnostmi k ověření. Posuzuje se podstatná shoda hlavního stacku a doložené praxe, nikoli stoprocentní pokrytí všech technologií. Chybějící doplňkové znalosti zůstávají k ověření; prokazatelně nesplněná povinná a nenahraditelná praxe je překážkou importu. Shoda stacku nepřebíjí doloženou překážku docházky ani pracovního jazyka. Osobní omezení zůstávají v soukromé konfiguraci. Novější výslovná oprava vlastníka se použije na zbývající předvýběr a zaznamená v checkpointu; nemění připnutý rozsah hledání ani historické výsledky. Existující nabídky a rozhodnutí se automaticky nemažou ani nepřepisují. Podrobný postup: [předvýběr před importem](../executor/skills/jobradar-check/pre-import-screening.md).
 
 Externí HTML se nebude ukládat jako vykonatelný obsah. Před zobrazením se převede na bezpečný text nebo sanitizovaný omezený markup. Text nabídky je nedůvěryhodný a nesmí řídit runner, MCP ani asistenta.
 

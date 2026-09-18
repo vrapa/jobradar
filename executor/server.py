@@ -27,6 +27,7 @@ class Executor:
         self.last_activity = 0
         self.claimed_at = 0
         self.failure = None
+        self.last_failure = None
         self.finished = False
 
     @staticmethod
@@ -66,11 +67,13 @@ class Executor:
                 self.api({"operation": "renew", "run_id": self.lease["run_id"], "lease_token": self.lease["lease_token"]})
             except RuntimeError:
                 self.failure = "Lease renewal failed; stop external work. Stored checkpoints remain available."
+                self.last_failure = self.failure
                 self.lease = None
 
     def expire_local_limits(self):
         if self.lease and not self.finished and (self.clock() - self.last_activity > 600 or self.clock() - self.claimed_at > 3600):
             self.failure = "Execution activity limit reached; stop Chrome and recover on the next authorized wake."
+            self.last_failure = self.failure
             self.lease = None
 
     def call(self, args):
@@ -80,7 +83,7 @@ class Executor:
             operation = args.get("operation")
             self.expire_local_limits()
             if operation == "status":
-                return {**self.api({"operation": "status"}), "active_run_id": self.lease["run_id"] if self.lease and not self.finished else None, "failure": self.failure}
+                return {**self.api({"operation": "status"}), "active_run_id": self.lease["run_id"] if self.lease and not self.finished else None, "failure": self.failure, "last_failure": self.last_failure, "lease_state": "blocked" if self.failure else "released" if self.finished else "unverified" if self.lease else "idle"}
             if operation == "claim":
                 if self.lease and not self.finished:
                     raise RuntimeError("This MCP session already owns a run; use task")
@@ -89,7 +92,7 @@ class Executor:
                 self.failure = None
                 self.finished = False
                 self.last_activity = self.claimed_at = self.clock()
-                return {"lease": {k: v for k, v in self.lease.items() if k != "lease_token"} if self.lease else None}
+                return {"lease": {k: v for k, v in self.lease.items() if k != "lease_token"} if self.lease else None, "failure": self.failure, "last_failure": self.last_failure, "lease_state": "unverified" if self.lease else "idle"}
             if operation not in ("verify", "task", "prepare_access", "start", "checkpoint", "pause", "import", "assessment", "finish"):
                 raise RuntimeError("Unknown operation")
             if not self.lease:
@@ -100,12 +103,15 @@ class Executor:
             except RuntimeError:
                 if operation == "verify":
                     self.failure = "Lease verification failed; stop external work."
+                    self.last_failure = self.failure
                     self.lease = None
                 raise
             if operation == "pause" and result.get("paused"):
                 self.finished = True
             if operation in ("finish", "prepare_access") and result.get("request_status") in ("complete", "partial", "cancelled", "waiting_for_login", "error"):
                 self.finished = True  # Retain receipt for idempotent terminal retry, but stop renewal.
+            if operation == "verify":
+                return {**result, "failure": self.failure, "last_failure": self.last_failure}
             return result
 
 
