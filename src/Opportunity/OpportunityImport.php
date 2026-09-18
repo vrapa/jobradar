@@ -21,6 +21,7 @@ final readonly class OpportunityImport
         public ?CounterpartyInput $counterparty = null,
         /** @var list<array<string,mixed>> */
         public array $attachmentReviews = [],
+        public ?ProjectKindInput $projectKinds = null,
     ) {
         AttachmentReviewInput::parse($attachmentReviews);
         if ($discoveryDefinitionId !== null && $discoveryDefinitionId < 1) { throw new \InvalidArgumentException('Neplatná definice nalezení.'); }

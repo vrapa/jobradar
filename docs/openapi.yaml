@@ -733,6 +733,8 @@ components:
         discoveryDefinitionId: { type: [integer, 'null'], minimum: 1, description: Existing manual-search definition; executor context must match assigned source. }
         counterparty:
           $ref: '#/components/schemas/CounterpartyInput'
+        projectKinds:
+          $ref: '#/components/schemas/ProjectKindInput'
         projectCare:
           type: [object, 'null']
           required: [value]
@@ -750,6 +752,21 @@ components:
       description: Independent evidence-based counterparty role. Omission retains history; explicit null value records unknown. Known roles require reason, confidence and verifiedAt.
       properties:
         value: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
+        reason: { type: [string, 'null'] }
+        confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+    ProjectKindInput:
+      type: [object, 'null']
+      additionalProperties: false
+      required: [values]
+      description: Evidence-based, multi-value project classification. Omission retains history; values null records unknown. Known values require reason, confidence and verifiedAt and are never inferred from the search query.
+      properties:
+        values:
+          type: [array, 'null']
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [new_build, takeover, prototype_to_production] }
         reason: { type: [string, 'null'] }
         confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
         verifiedAt: { type: [string, 'null'], format: date-time }
@@ -778,7 +795,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 200 }
     OpportunitySummary:
       type: object
-      required: [id, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, rate, workload, assessment]
+      required: [id, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, project_kinds, rate, workload, assessment]
       properties:
         id: { type: integer, minimum: 1 }
         title: { type: string }
@@ -791,6 +808,10 @@ components:
         workflow_status: { type: string }
         project_care: { type: [boolean, 'null'], description: 'Převzetí či péče o existující aplikaci; null znamená neověřeno.' }
         counterparty: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
+        project_kinds:
+          type: [array, 'null']
+          description: Latest evidenced project types; null means unknown.
+          items: { type: string, enum: [new_build, takeover, prototype_to_production] }
         rate:
           type: object
           required: [min, max, currency, unit]
@@ -818,7 +839,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/OpportunitySummary'
         - type: object
-          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, terms, technologies, versions, decision_state, current_assessment]
+          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, project_kind_history, terms, technologies, versions, decision_state, current_assessment]
           properties:
             original_title: { type: string }
             translated_title: { type: [string, 'null'] }
@@ -853,6 +874,21 @@ components:
                   value: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
                   reason: { type: [string, 'null'] }
                   confidence: { type: [number, 'null'] }
+                  verified_at: { type: [string, 'null'], format: date-time }
+                  created_at: { type: string, format: date-time }
+            project_kind_history:
+              type: array
+              description: Append-only evidence-based classifications, newest first; each references the concrete offer version.
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  source_version_id: { type: integer }
+                  values:
+                    type: [array, 'null']
+                    items: { type: string, enum: [new_build, takeover, prototype_to_production] }
+                  reason: { type: [string, 'null'] }
+                  confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
                   verified_at: { type: [string, 'null'], format: date-time }
                   created_at: { type: string, format: date-time }
             discoveries:
@@ -930,7 +966,7 @@ components:
       properties:
         search_plans:
           type: array
-          description: Owner-scoped pinned definitions and ordered steps with shared budget and recovery state; see docs/direct-takeover.md.
+          description: Owner-scoped pinned definitions and ordered steps with shared budget, recovery state, per-step import counts, unique opportunity count and cross-step duplicate count; see docs/direct-takeover.md.
           items: { type: object }
         id: { type: integer, minimum: 1 }
         status: { type: string }

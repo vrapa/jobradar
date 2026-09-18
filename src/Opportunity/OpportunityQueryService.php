@@ -11,7 +11,7 @@ use Nette\Database\Row;
 
 final class OpportunityQueryService
 {
-    public function __construct(private readonly Connection $database, private readonly ProjectCareService $projectCare, private readonly CounterpartyService $counterparties)
+    public function __construct(private readonly Connection $database, private readonly ProjectCareService $projectCare, private readonly CounterpartyService $counterparties, private readonly ProjectKindService $projectKinds)
     {
     }
 
@@ -48,6 +48,7 @@ final class OpportunityQueryService
             'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
                     (SELECT pc.value FROM opportunity_project_care pc WHERE pc.opportunity_id = o.id ORDER BY pc.id DESC LIMIT 1) AS project_care,
                     (SELECT cp.value FROM opportunity_counterparty cp WHERE cp.opportunity_id=o.id ORDER BY cp.id DESC LIMIT 1) AS counterparty,
+                    (SELECT pk.values_json FROM opportunity_project_kinds pk WHERE pk.opportunity_id=o.id ORDER BY pk.id DESC LIMIT 1) AS project_kinds,
                     v.original_title, v.translated_title, v.summary, v.incomplete,
                     terms.rate_min, terms.rate_max, terms.currency, terms.rate_unit,
                     terms.workload_min, terms.workload_max, terms.workload_unit,
@@ -104,6 +105,7 @@ final class OpportunityQueryService
                 recommendation: self::nullableString($row['recommendation']),
                 projectCare: $row['project_care'] === null ? null : (bool) $row['project_care'],
                 counterparty: $row['counterparty'],
+                projectKinds: $row['project_kinds'] === null ? null : json_decode((string) $row['project_kinds'], true, 32, JSON_THROW_ON_ERROR),
             ),
             $rows,
         );
@@ -160,6 +162,7 @@ final class OpportunityQueryService
             technologies: $technologies,
             projectCareHistory: $this->projectCare->history($id),
             counterpartyHistory: $this->counterparties->history($id),
+            projectKindHistory: $this->projectKinds->history($id),
             discoveries: array_map(static function ($d): array { $v = (array) $d; $v['discovered_at'] = $v['discovered_at']->format(DATE_ATOM); return $v; }, $this->database->fetchAll('SELECT d.search_definition_id,d.discovered_at,s.name AS source_name,sd.query_text FROM opportunity_discoveries d JOIN source_search_definitions sd ON sd.id = d.search_definition_id JOIN sources s ON s.id = sd.source_id WHERE d.opportunity_id = ? ORDER BY d.id', $id)),
             decisionState: new DecisionStateView(
                 decision: OpportunityDecision::from((string) $row['user_decision']),

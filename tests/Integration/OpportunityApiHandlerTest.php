@@ -48,6 +48,12 @@ final class OpportunityApiHandlerTest extends TestCase
                 'originalText' => '<script>neverExecute()</script>',
                 'companyName' => $companyName,
                 'incomplete' => true,
+                'projectKinds' => [
+                    'values' => ['new_build'],
+                    'reason' => 'Synthetic offer requests a new application.',
+                    'confidence' => 0.9,
+                    'verifiedAt' => '2026-09-18T10:00:00Z',
+                ],
             ];
 
             $created = self::json($import->handle(['body' => $body]));
@@ -75,6 +81,8 @@ final class OpportunityApiHandlerTest extends TestCase
             self::assertNull($detail['data']['current_assessment']);
             self::assertNull($detail['data']['rate']['min']);
             self::assertNull($detail['data']['assessment']['score_min']);
+            self::assertSame(['new_build'], $detail['data']['project_kinds']);
+            self::assertCount(1, $detail['data']['project_kind_history']);
             self::assertSame(2, (int) $database->fetchField(
                 "SELECT COUNT(*) FROM audit_log WHERE event_type = 'opportunity.manual_imported' AND actor_user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.opportunity_id')) = ?",
                 $userId,
@@ -104,6 +112,7 @@ final class OpportunityApiHandlerTest extends TestCase
                 $database->query('DELETE FROM assistant_actions WHERE client_identifier = ?', 'synthetic-opportunity-client');
                 $database->query('DELETE FROM opportunity_decision_history WHERE opportunity_id = ?', $opportunityId);
                 $database->query('DELETE FROM user_opportunity_state WHERE opportunity_id = ?', $opportunityId);
+                $database->query('DELETE FROM opportunity_project_kinds WHERE opportunity_id = ?', $opportunityId);
                 $database->query(
                     "DELETE FROM audit_log WHERE JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.opportunity_id')) = ?",
                     (string) $opportunityId,

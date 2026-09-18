@@ -26,6 +26,7 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly DecisionQueryService $decisionQueries,
         private readonly \App\Opportunity\ProjectCareService $projectCare,
         private readonly \App\Opportunity\CounterpartyService $counterparty,
+        private readonly \App\Opportunity\ProjectKindService $projectKinds,
         private readonly ActionItemService $actionItems,
         private readonly \App\Opportunity\AttachmentReviewService $attachments,
         private readonly \App\Application\ApplicationWorkflowService $workflow,
@@ -271,6 +272,35 @@ final class OpportunityPresenter extends SecuredPresenter
             try { $this->counterparty->save($this->opportunityId, (int) $v['lockVersion'], \App\Opportunity\CounterpartyForm::read($v), (int) $this->getUser()->getId()); }
             catch (\InvalidArgumentException|OpportunityConflictException $e) { $form->addError($e->getMessage()); return; }
             $this->flashMessage('Klasifikace uložena do historie.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
+    protected function createComponentProjectKindForm(): Form
+    {
+        $opportunity = $this->opportunities->getDetail($this->opportunityId, (int) $this->getUser()->getId());
+        if ($opportunity === null) { $this->error('Nabídka nenalezena.'); }
+        $form = new Form();
+        $form->addHidden('lockVersion', (string) $opportunity->lockVersion);
+        \App\Opportunity\ProjectKindForm::add($form);
+        $latest = $opportunity->projectKindHistory[0] ?? null;
+        $form->onAnchor[] = static function (Form $form) use ($latest): void {
+            if (!$form->isSubmitted() && $latest !== null) {
+                $form->setDefaults([
+                    'projectKindValues' => $latest['values'] ?? [],
+                    'projectKindReason' => $latest['reason'],
+                    'projectKindConfidence' => $latest['confidence'],
+                ]);
+            }
+        };
+        $form->addProtection();
+        $form->addSubmit('send', 'Uložit typ projektu');
+        $form->onSuccess[] = function (Form $form): void {
+            $values = (array) $form->getValues();
+            try { $this->projectKinds->save($this->opportunityId, (int) $values['lockVersion'], \App\Opportunity\ProjectKindForm::read($values), (int) $this->getUser()->getId()); }
+            catch (\InvalidArgumentException|OpportunityConflictException $exception) { $form->addError($exception->getMessage()); return; }
+            $this->flashMessage('Typ projektu byl uložen do historie.', 'success');
             $this->redirect('this');
         };
         return $form;

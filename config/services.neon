@@ -33,6 +33,7 @@ services:
 	- App\Opportunity\OpportunityImportService
 	- App\Opportunity\ProjectCareService
 	- App\Opportunity\CounterpartyService
+	- App\Opportunity\ProjectKindService
 	- App\Opportunity\OpportunityQueryService
 	- App\Opportunity\OpportunityTermsService
 	- App\Opportunity\OpportunityJsonMapper

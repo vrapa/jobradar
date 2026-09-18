@@ -1,6 +1,6 @@
 # Plán rozšíření a vyhodnocování projektového hledání
 
-Stav: návrh k postupné implementaci. Tento dokument nemění chování aplikace ani aktivní konfiguraci a neopravňuje ke spuštění kontroly nebo odeslání reakce. Hlavní specifikací zůstává [implementační plán](implementation-plan.md).
+Stav: produktová podpora typu projektu a srovnání větví je implementována; kontrola soukromé konfigurace a skutečný pilot čekají na samostatný provozní krok. Tento dokument neopravňuje ke spuštění kontroly nebo odeslání reakce. Hlavní specifikací zůstává [implementační plán](implementation-plan.md).
 
 ## Cíl a hranice
 

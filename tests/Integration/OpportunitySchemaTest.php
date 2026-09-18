@@ -63,6 +63,7 @@ final class OpportunitySchemaTest extends TestCase
             'decision_delegations',
             'technology_requirements',
             'user_opportunity_state',
+            'opportunity_project_kinds',
         ];
         $statement = $this->database->query(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name",

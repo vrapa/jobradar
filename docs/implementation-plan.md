@@ -1,8 +1,10 @@
 # JobRadar – kompletní implementační plán
 
-## Návrh rozšíření projektového hledání
+## Rozšíření projektového hledání
 
-[Plán rozšíření a vyhodnocování projektového hledání](opportunity-discovery-plan.md) popisuje postup kontroly soukromé konfigurace, oddělení typů zadání, posouzení obchodní vhodnosti a omezeného srovnávacího pilotu. Nejprve využívá existující verzované kroky a podmínky nabídek; nové klasifikace a reporty se doplňují pouze podle ověřené potřeby. Jde o návrh, nikoli implementované chování. Osobní trhy, dotazy a sazby zůstávají v soukromé konfiguraci. Plán ani jeho uložení nespouští hledání.
+[Plán rozšíření a vyhodnocování projektového hledání](opportunity-discovery-plan.md) popisuje postup kontroly soukromé konfigurace, oddělení typů zadání, posouzení obchodní vhodnosti a omezeného srovnávacího pilotu. Implementovaná klasifikace typu projektu rozlišuje nový vývoj, převzetí či modernizaci a dokončení prototypu pro provoz; dovoluje doloženou kombinaci, neověřený stav a append-only historii svázanou s verzí nabídky. Import, API, MCP, detail i přehled zachovávají klasifikaci odděleně od `projectCare` a role protistrany. Dotaz ani krok hledání typ projektu automaticky nepotvrzuje.
+
+Detail kontroly zobrazuje u každé vyhledávací větve počet importovaných nabídek a za celé připnuté zadání počet unikátních nabídek i opakovaných zásahů napříč větvemi. Kategorie zachovávají oddělený počet souvisejících kandidátů. Historické definice a nabídky se neodhadují zpětně. Osobní trhy, dotazy a sazby zůstávají v soukromé konfiguraci. Změna zadání ani klasifikace nespouští hledání a nemění uživatelské rozhodnutí.
 
 ## Předvýběr podle doložené praxe a podmínek
 

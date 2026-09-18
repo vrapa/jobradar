@@ -17,6 +17,7 @@
     <label for="care">Převzetí / péče o existující aplikaci</label>
     <select id="care" name="care" class="form-select w-auto"><option value="all" selected={$care === 'all'}>Vše</option><option value="yes" selected={$care === 'yes'}>Ano</option><option value="no" selected={$care === 'no'}>Ne</option><option value="unknown" selected={$care === 'unknown'}>Neověřeno</option></select>
     <label for="party">Protistrana</label><select id="party" name="party" class="form-select w-auto"><option value="all" selected={$party === 'all'}>Všechny</option><option value="unknown" selected={$party === 'unknown'}>Neověřeno</option><option n:foreach="App\Opportunity\CounterpartyInput::LABELS as $key => $label" value="{$key}" selected={$party === $key}>{$label}</option></select>
+    <label for="kind">Typ projektu</label><select id="kind" name="kind" class="form-select w-auto"><option value="all" selected={$kind === 'all'}>Všechny</option><option value="unknown" selected={$kind === 'unknown'}>Neověřeno</option><option n:foreach="App\Opportunity\ProjectKindInput::LABELS as $key => $label" value="{$key}" selected={$kind === $key}>{$label}</option></select>
     <button type="submit" class="btn btn-outline-primary">Filtrovat</button>
 </form>
 <div id="execution-status" data-execution-poll>
@@ -88,6 +89,7 @@
                     <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
                     <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplné</span>
                     <span n:if="$opportunity->projectCare === true" class="badge text-bg-info">Převzetí / péče o aplikaci</span>
+                    <span n:foreach="$opportunity->projectKinds ?? [] as $projectKind" class="badge text-bg-secondary">{App\Opportunity\ProjectKindInput::LABELS[$projectKind]}</span>
                     <span n:if="$opportunity->decision->value === 'react'" class="badge text-bg-success">{if in_array($opportunity->workflowStatus, ['none', 'preparing', 'awaiting_approval'], true)}K reakci{else}{=App\Application\ApplicationWorkflowService::LABELS[$opportunity->workflowStatus] ?? $opportunity->workflowStatus}{/if}</span>
                 </div>
                 <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id" class="stretched-link text-decoration-none">{$opportunity->title}</a></h2>

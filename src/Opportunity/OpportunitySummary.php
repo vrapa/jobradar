@@ -31,6 +31,8 @@ final readonly class OpportunitySummary
         public ?string $recommendation,
         public ?bool $projectCare = null,
         public ?string $counterparty = null,
+        /** @var list<string>|null */
+        public ?array $projectKinds = null,
     ) {
     }
 }

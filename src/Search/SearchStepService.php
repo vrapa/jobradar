@@ -16,23 +16,32 @@ final class SearchStepService
     {
         $rows = $this->db->fetchAll('SELECT s.name,d.version,d.result_limit,d.steps_json,rs.id AS run_source_id FROM search_requests q JOIN search_request_sources qs ON qs.search_request_id=q.id JOIN sources s ON s.id=qs.source_id JOIN source_search_definitions d ON d.id=qs.search_definition_id LEFT JOIN search_runs r ON r.search_request_id=q.id LEFT JOIN search_run_sources rs ON rs.search_run_id=r.id AND rs.source_id=s.id WHERE q.id=? AND q.requested_by_user_id=? AND d.steps_json IS NOT NULL ORDER BY s.priority,s.name,s.id', $request, $owner);
         return array_map(function ($row): array {
-            $plan = $row['run_source_id'] === null ? ['limit' => (int) $row['result_limit'], 'steps' => array_map(static fn ($step): array => [...$step, 'status' => 'planned', 'displayed_count' => 0, 'checkpoint' => null], SearchPlan::parse((string) $row['steps_json'], (int) $row['result_limit']))] : $this->state((int) $row['run_source_id']);
+            $plan = $row['run_source_id'] === null ? [
+                'limit' => (int) $row['result_limit'],
+                'unique_opportunity_count' => 0,
+                'cross_step_duplicate_count' => 0,
+                'steps' => array_map(static fn ($step): array => [...$step, 'status' => 'planned', 'displayed_count' => 0, 'related_count' => null, 'imported_count' => 0, 'checkpoint' => null], SearchPlan::parse((string) $row['steps_json'], (int) $row['result_limit'])),
+            ] : $this->state((int) $row['run_source_id']);
             return ['name' => $row['name'], 'version' => $row['version'], ...$plan];
         }, $rows);
     }
 
-    /** @return array{limit:int,steps:list<array<string,mixed>>} */
+    /** @return array{limit:int,unique_opportunity_count:int,cross_step_duplicate_count:int,steps:list<array<string,mixed>>} */
     public function state(int $runSource): array
     {
         $d = $this->db->fetch('SELECT d.steps_json,d.result_limit FROM search_run_sources rs JOIN search_runs r ON r.id=rs.search_run_id JOIN search_request_sources qs ON qs.search_request_id=r.search_request_id AND qs.source_id=rs.source_id LEFT JOIN source_search_definitions d ON d.id=qs.search_definition_id WHERE rs.id=?', $runSource);
-        if ($d === null || $d['steps_json'] === null) { return ['limit' => 0, 'steps' => []]; }
+        if ($d === null || $d['steps_json'] === null) { return ['limit' => 0, 'unique_opportunity_count' => 0, 'cross_step_duplicate_count' => 0, 'steps' => []]; }
         $steps = SearchPlan::parse((string) $d['steps_json'], (int) $d['result_limit']);
         $states = [];
         foreach ($steps as $step) {
             $row = $this->db->fetch('SELECT id,step_status,displayed_count,checkpoint_json FROM search_run_steps WHERE search_run_source_id=? AND step_key=?', $runSource, $step['key']);
-            $states[] = [...$step, 'status' => $row['step_status'] ?? 'planned', 'displayed_count' => (int) ($row['displayed_count'] ?? 0), 'checkpoint' => $row === null ? null : json_decode((string) ($row['checkpoint_json'] ?? 'null'), true)];
+            $checkpoint = $row === null ? null : json_decode((string) ($row['checkpoint_json'] ?? 'null'), true);
+            $imported = $row === null ? 0 : (int) $this->db->fetchField('SELECT COUNT(*) FROM search_step_opportunities WHERE step_id=?', $row['id']);
+            $states[] = [...$step, 'status' => $row['step_status'] ?? 'planned', 'displayed_count' => (int) ($row['displayed_count'] ?? 0), 'related_count' => $step['mode'] === 'category' ? ($checkpoint['step_related_count'] ?? null) : null, 'imported_count' => $imported, 'checkpoint' => $checkpoint];
         }
-        return ['limit' => (int) $d['result_limit'], 'steps' => $states];
+        $importedTotal = array_sum(array_column($states, 'imported_count'));
+        $unique = (int) $this->db->fetchField('SELECT COUNT(DISTINCT so.opportunity_id) FROM search_step_opportunities so JOIN search_run_steps st ON st.id=so.step_id WHERE st.search_run_source_id=?', $runSource);
+        return ['limit' => (int) $d['result_limit'], 'unique_opportunity_count' => $unique, 'cross_step_duplicate_count' => $importedTotal - $unique, 'steps' => $states];
     }
 
     /** @param array<string,mixed> $payload */

@@ -18,6 +18,7 @@ final class OpportunityImportService
         private readonly AuditLogger $auditLogger,
         private readonly ProjectCareService $projectCare,
         private readonly CounterpartyService $counterparties,
+        private readonly ProjectKindService $projectKinds,
         private readonly AttachmentReviewService $attachments,
     ) {
     }
@@ -122,6 +123,9 @@ final class OpportunityImportService
             }
             if ($import->counterparty !== null) {
                 $this->counterparties->save($opportunityId, (int) $this->database->fetchField('SELECT lock_version FROM opportunities WHERE id=?', $opportunityId), $import->counterparty, $actorUserId, $versionId);
+            }
+            if ($import->projectKinds !== null) {
+                $this->projectKinds->save($opportunityId, (int) $this->database->fetchField('SELECT lock_version FROM opportunities WHERE id=?', $opportunityId), $import->projectKinds, $actorUserId, $versionId);
             }
             $this->auditLogger->record($sourceId === null ? 'opportunity.manual_imported' : 'opportunity.source_imported', $actorUserId, [
                 'opportunity_id' => $opportunityId,

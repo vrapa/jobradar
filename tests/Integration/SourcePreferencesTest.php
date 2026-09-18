@@ -147,6 +147,10 @@ final class SourcePreferencesTest extends TestCase
             $service = $this->container->getByType(\App\Search\SearchStepService::class);
             $service->assertFinished((int) $task['sources'][0]['run_source_id'], 3);
             $this->rejects(fn () => $service->assertFinished((int) $task['sources'][0]['run_source_id'], 2));
+            $plans = $service->requestPlans($this->user, $request->requestId);
+            self::assertSame([1, 2, 0], array_column($plans[0]['steps'], 'imported_count'));
+            self::assertSame(2, $plans[0]['unique_opportunity_count']);
+            self::assertSame(1, $plans[0]['cross_step_duplicate_count']);
         });
     }
 
@@ -168,6 +172,33 @@ final class SourcePreferencesTest extends TestCase
             $detail = $this->container->getByType(\App\Opportunity\OpportunityQueryService::class)->getDetail($first->opportunityId, $this->user);
             self::assertNotNull($detail);
             self::assertCount(2, $detail->counterpartyHistory);
+            self::assertSame(0, (int) $this->db->fetchField('SELECT COUNT(*) FROM user_opportunity_state WHERE opportunity_id=?', $first->opportunityId));
+        });
+    }
+
+    public function testProjectKindsSupportCombinationsUnknownAndHistoricalCompatibility(): void
+    {
+        $this->withinTransaction(function (): void {
+            $importer = $this->container->getByType(OpportunityImportService::class);
+            $service = $this->container->getByType(\App\Opportunity\ProjectKindService::class);
+            $url = 'https://example.test/project-kind/' . bin2hex(random_bytes(8));
+            $evidence = new \App\Opportunity\ProjectKindInput(
+                ['takeover', 'prototype_to_production'],
+                'Synthetic existing prototype requires takeover and production hardening.',
+                0.9,
+                new \DateTimeImmutable('2026-09-18T10:00:00Z'),
+            );
+            $first = $importer->import(new OpportunityImport($url, 'Synthetic prototype', 'Existing prototype', projectKinds: $evidence), $this->user);
+            $importer->import(new OpportunityImport($url, 'Synthetic prototype', 'Changed text without classification'), $this->user);
+            self::assertSame(['takeover', 'prototype_to_production'], $service->history($first->opportunityId)[0]['values']);
+            self::assertSame($first->sourceVersionId, (int) $service->history($first->opportunityId)[0]['source_version_id']);
+            $version = (int) $this->db->fetchField('SELECT lock_version FROM opportunities WHERE id=?', $first->opportunityId);
+            $service->save($first->opportunityId, $version, new \App\Opportunity\ProjectKindInput(null), $this->user);
+            self::assertCount(2, $service->history($first->opportunityId));
+            self::assertNull($service->history($first->opportunityId)[0]['values']);
+            $detail = $this->container->getByType(\App\Opportunity\OpportunityQueryService::class)->getDetail($first->opportunityId, $this->user);
+            self::assertNotNull($detail);
+            self::assertCount(2, $detail->projectKindHistory);
             self::assertSame(0, (int) $this->db->fetchField('SELECT COUNT(*) FROM user_opportunity_state WHERE opportunity_id=?', $first->opportunityId));
         });
     }

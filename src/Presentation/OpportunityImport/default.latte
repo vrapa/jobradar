@@ -46,6 +46,12 @@
 
             <hr class="my-4">
             <p>Použijte URL a text původního detailu, nikoli úryvek nebo AI shrnutí z vyhledávače.</p>
+            <fieldset class="mb-3"><legend class="h5">Typ projektu</legend>
+                <p class="small">Vyberte pouze typy doložené textem nabídky. Prázdný výběr při importu zachová případnou starší klasifikaci.</p>
+                <div>{input projectKindValues}</div>
+                {label projectKindReason /}{input projectKindReason, class: 'form-control'}
+                {label projectKindConfidence /}{input projectKindConfidence, class: 'form-control'}
+            </fieldset>
             <fieldset class="mb-3"><legend class="h5">Převzetí / péče o existující aplikaci</legend>
                 {label projectCareValue /}{input projectCareValue, class: 'form-select'}
                 {label projectCareReason /}{input projectCareReason, class: 'form-control'}

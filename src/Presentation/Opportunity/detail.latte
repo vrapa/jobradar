@@ -1,6 +1,18 @@
 {block title}{$opportunity->title}{/block}
 
 {block content}
+<details class="card p-3 mb-3" n:attr="open: $presenter['projectKindForm']->hasErrors()">
+    <summary>Typ projektu: {if count($opportunity->projectKindHistory) === 0 || $opportunity->projectKindHistory[0]['values'] === null}neověřeno{else}{foreach $opportunity->projectKindHistory[0]['values'] as $value}{if !$iterator->first}, {/if}{App\Opportunity\ProjectKindInput::LABELS[$value]}{/foreach}{/if}</summary>
+    {form projectKindForm}
+        <div n:if="$form->hasErrors()" class="alert alert-danger mt-3" role="alert"><ul><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+        <div class="my-3">{label projectKindValues /}{input projectKindValues}</div>
+        <div class="mb-3">{label projectKindReason /}{input projectKindReason, class: 'form-control'}</div>
+        <div class="mb-3">{label projectKindConfidence /}{input projectKindConfidence, class: 'form-control'}</div>
+        <p class="small text-body-secondary">Prázdný výběr uloží neověřený stav. Typ se neodvozuje automaticky z dotazu hledání.</p>
+        <button n:name="send" class="btn btn-primary mb-3">Uložit typ projektu</button>
+    {/form}
+    <ul><li n:foreach="$opportunity->projectKindHistory as $classification">{$classification['created_at']} · verze nabídky #{$classification['source_version_id']} · {if $classification['values'] === null}neověřeno{else}{foreach $classification['values'] as $value}{if !$iterator->first}, {/if}{App\Opportunity\ProjectKindInput::LABELS[$value]}{/foreach}{/if} · {$classification['reason']} · jistota {$classification['confidence'] ?? 'neznámá'} · ověřeno {$classification['verified_at'] ?? 'neověřeno'}</li></ul>
+</details>
 <details class="card p-3 mb-3" n:attr="open: $presenter['counterpartyForm']->hasErrors()">
     <summary>Protistrana: {App\Opportunity\CounterpartyInput::LABELS[$opportunity->counterpartyHistory[0]['value'] ?? ''] ?? 'neověřeno'}</summary>
     {form counterpartyForm}

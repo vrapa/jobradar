@@ -141,6 +141,7 @@ final class JobRadarMcpServerFactory
                 'attachmentReviews' => \App\Opportunity\AttachmentReviewInput::schema(),
                 'projectCare' => \App\Opportunity\ProjectCareInput::schema(),
                 'counterparty' => \App\Opportunity\CounterpartyInput::schema(),
+                'projectKinds' => \App\Opportunity\ProjectKindInput::schema(),
                 'discoveryDefinitionId' => ['type' => ['integer','null'], 'minimum' => 1],
             ],
         ];

@@ -36,12 +36,20 @@ final class HomePresenter extends SecuredPresenter
         $party = (string) ($this->getParameter('party') ?? 'all');
         if (!in_array($party, ['all','unknown','owner','supplier','recruiter'], true)) { $party = 'all'; }
         if ($party !== 'all') { $items = array_values(array_filter($items, static fn ($o): bool => $o->counterparty === ($party === 'unknown' ? null : $party))); }
+        $kind = (string) ($this->getParameter('kind') ?? 'all');
+        if (!in_array($kind, ['all', 'unknown', ...array_keys(\App\Opportunity\ProjectKindInput::LABELS)], true)) { $kind = 'all'; }
+        if ($kind !== 'all') {
+            $items = array_values(array_filter($items, static fn ($opportunity): bool => $kind === 'unknown'
+                ? $opportunity->projectKinds === null
+                : in_array($kind, $opportunity->projectKinds ?? [], true)));
+        }
         $this->template->setParameters([
             'opportunities' => $items,
             'onlyUndecided' => $this->getParameter('decision') === 'undecided',
             'opportunityCount' => count($items),
             'care' => $care,
             'party' => $party,
+            'kind' => $kind,
             'coverage' => $this->sourceQueries->latestCoverageSummary((int) $this->getUser()->getId()),
             'unresolvedSources' => $this->sourceQueries->unresolvedSources((int) $this->getUser()->getId()),
             'executor' => $this->sourceQueries->executorStatus((int) $this->getUser()->getId()),
