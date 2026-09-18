@@ -115,14 +115,31 @@ final class JobRadarMcpToolsTest extends TestCase
             $http,
         ));
 
-        try {
-            $tools->listSources();
-            self::fail('Zakázaná operace musí selhat.');
-        } catch (\RuntimeException $exception) {
-            self::assertStringContainsString('scope_denied', $exception->getMessage());
-            self::assertStringNotContainsString('remote sensitive detail', $exception->getMessage());
-            self::assertStringNotContainsString('jr_hidden_token', $exception->getMessage());
-        }
+        $result = $tools->listSources();
+        self::assertTrue($result->isError);
+        self::assertSame('scope_denied', $result->structuredContent['error']['code'] ?? null);
+        self::assertSame(403, $result->structuredContent['error']['http_status'] ?? null);
+        $serialized = json_encode($result, JSON_THROW_ON_ERROR);
+        self::assertStringNotContainsString('remote sensitive detail', $serialized);
+        self::assertStringNotContainsString('jr_hidden_token', $serialized);
+    }
+
+    public function testTodoistStatusReconciliationUsesVersionedApi(): void
+    {
+        $http = new McpRecordingHttpClient([
+            new RunnerHttpResponse(200, ['data' => ['acknowledged' => true]]),
+        ]);
+        $tools = new JobRadarMcpTools(new JobRadarMcpApiClient(
+            'https://jobradar.example.test/api/v1',
+            'synthetic-token',
+            $http,
+        ));
+
+        $result = $tools->acknowledgeTodoistStatus(42, 'completed');
+
+        self::assertFalse($result->isError);
+        self::assertSame(['POST /api/v1/action-items/synced'], $http->requests);
+        self::assertSame(['action_item_id' => 42, 'status' => 'completed'], $http->bodies[0]);
     }
 }
 

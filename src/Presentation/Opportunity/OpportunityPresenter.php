@@ -148,6 +148,7 @@ final class OpportunityPresenter extends SecuredPresenter
         $events = match ($offer->decisionState->workflowStatus) {
             'none', 'preparing', 'awaiting_approval' => ['prepared' => 'Reakce je připravena ke schválení', 'submitted' => 'Reakce byla skutečně odeslána', 'closed' => 'Uzavřít jednání'],
             'submitted', 'awaiting_response' => ['response_received' => 'Přišla odpověď', 'closed' => 'Uzavřít jednání'],
+            'closed' => ['response_received' => 'Přišla pozdější odpověď'],
             default => ['closed' => 'Uzavřít jednání'],
         };
         $form->addSelect('event', 'Co se stalo', $events)->setRequired();

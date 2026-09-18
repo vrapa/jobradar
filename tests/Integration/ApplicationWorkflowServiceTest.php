@@ -77,6 +77,10 @@ final class ApplicationWorkflowServiceTest extends TestCase
             self::assertSame('open', $db->fetchField('SELECT status FROM action_items WHERE id=?', $unrelated));
             $workflow->record($user, $offer, ['event' => 'closed', 'expected_lock_version' => 4, 'idempotency_key' => 'closed-' . $unique, 'reference' => 'Jednání dokončeno', 'occurred_at' => $now->format(DATE_ATOM)]);
             self::assertSame('closed', $queries->getDetail($offer, $user)->decisionState->workflowStatus);
+            $lateResponse = $workflow->record($user, $offer, ['event' => 'response_received', 'expected_lock_version' => 5, 'idempotency_key' => 'late-response-' . $unique, 'reference' => 'Late verified reply synthetic-3', 'occurred_at' => $now->format(DATE_ATOM)]);
+            self::assertSame('response_received', $lateResponse['workflow_status']);
+            self::assertSame('response_received', $queries->getDetail($offer, $user)->decisionState->workflowStatus);
+            self::assertCount(5, $workflow->history($user, $offer));
         } finally {
             if ($user !== null) {
                 $db->query('DELETE t FROM external_tasks t JOIN action_items a ON a.id=t.action_item_id WHERE a.user_id=?', $user);

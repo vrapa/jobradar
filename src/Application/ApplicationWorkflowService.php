@@ -80,7 +80,9 @@ final class ApplicationWorkflowService
             $allowedStates = match ($event) {
                 'prepared' => ['none', 'preparing', 'awaiting_approval'],
                 'submitted' => ['none', 'preparing', 'awaiting_approval'],
-                'response_received' => ['submitted', 'awaiting_response'],
+                // A verified reply can arrive after a no-response closure. Keep the
+                // closure in history and reopen the workflow as response_received.
+                'response_received' => ['submitted', 'awaiting_response', 'closed'],
                 'closed' => ['none', 'preparing', 'awaiting_approval', 'submitted', 'awaiting_response', 'response_received'],
             };
             if (!in_array($previous, $allowedStates, true) || (in_array($event, ['prepared', 'submitted'], true) && $state['decision'] !== 'react')) {

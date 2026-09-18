@@ -71,7 +71,7 @@ final class JobRadarMcpApiClient
         if ($response->statusCode < 200 || $response->statusCode >= 300) {
             $error = $response->payload['error'] ?? null;
             $code = is_array($error) && isset($error['code']) && is_string($error['code']) ? $error['code'] : 'api_error';
-            throw new \RuntimeException(sprintf('API JobRadaru odmítlo MCP operaci (%s, HTTP %d).', $code, $response->statusCode));
+            throw new JobRadarMcpApiException($code, $response->statusCode);
         }
         return $response->payload;
     }

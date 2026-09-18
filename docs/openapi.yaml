@@ -10,7 +10,7 @@ paths:
     post:
       operationId: recordApplicationEvent
       summary: Record preparation, proven approved submission, received response or closure; never sends anything
-      description: Requires applications:write. Uses decision_state.lock_version, owner-scoped idempotency and atomic history/task changes. Submission requires channel, approval_reference, confirmation reference, actual occurred_at and a chosen follow_up_at later than submission. Prepared is not sent. Replay with identical payload returns the original result.
+      description: Requires applications:write. Uses decision_state.lock_version, owner-scoped idempotency and atomic history/task changes. Submission requires channel, approval_reference, confirmation reference, actual occurred_at and a chosen follow_up_at later than submission. Prepared is not sent. A verified late response may move closed to response_received while preserving closure history. Replay with identical payload returns the original result.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true

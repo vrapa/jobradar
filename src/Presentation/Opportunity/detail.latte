@@ -170,7 +170,7 @@
     <div class="card-body">
         <h2 id="application-title" class="h5">Stav reakce: {$workflowLabels[$opportunity->decisionState->workflowStatus] ?? $opportunity->decisionState->workflowStatus}</h2>
         <p class="text-body-secondary">Připravený text čeká na schválení. Až po skutečném odeslání přejde nabídka do „Čekáme na odpověď“. Tento formulář pouze zaznamenává stav.</p>
-        {if $opportunity->decisionState->workflowStatus !== 'closed' && ($opportunity->decisionState->decision->value === 'react' || $opportunity->decisionState->workflowStatus !== 'none')}
+        {if $opportunity->decisionState->decision->value === 'react' || $opportunity->decisionState->workflowStatus !== 'none'}
         <details n:attr="open => $presenter['applicationForm']->hasErrors()">
             <summary class="fw-semibold">Zaznamenat přípravu, odeslání nebo odpověď</summary>
             {form applicationForm, class: 'mt-3'}
@@ -193,7 +193,6 @@
                 <button n:name="save" class="btn btn-primary">Uložit stav reakce</button>
             {/form}
         </details>
-        {elseif $opportunity->decisionState->workflowStatus === 'closed'}<p class="mb-0">Jednání je uzavřeno; historie zůstává uložená.</p>
         {else}<p class="mb-0">Pro přípravu nejprve zvolte Reagovat.</p>{/if}
         <details n:if="count($applicationHistory) > 0" class="mt-3">
             <summary>Historie reakce ({count($applicationHistory)})</summary>

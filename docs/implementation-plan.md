@@ -36,7 +36,7 @@ Konzolový bootstrap na systémech s POSIX odmítá efektivní UID 0 ještě př
 
 ### Příprava, odeslání a čekání na odpověď (9. 9. 2026)
 
-Migrace `016_application_workflow.sql` zavádí auditované idempotentní události reakce. `prepared` znamená `awaiting_approval`; `submitted` pouze eviduje skutečně doložené schválené odeslání a nastaví `awaiting_response`. Vyžaduje potvrzení, odkaz na schválení, skutečný čas, kanál a zvolený termín kontroly odpovědi. Nic neposílá. Atomicky dokončí výslovně vybrané přípravné úkoly a založí jeden `follow_up`. Opakování stejného klíče vrátí původní výsledek; jiný obsah, zastaralá verze nebo nepovolený přechod se odmítnou. `response_received` a `closed` ukončí jen vlastní připomínku vytvořenou při odeslání. Rozhodnutí nabídky zůstává zachováno.
+Migrace `016_application_workflow.sql` zavádí auditované idempotentní události reakce. `prepared` znamená `awaiting_approval`; `submitted` pouze eviduje skutečně doložené schválené odeslání a nastaví `awaiting_response`. Vyžaduje potvrzení, odkaz na schválení, skutečný čas, kanál a zvolený termín kontroly odpovědi. Nic neposílá. Atomicky dokončí výslovně vybrané přípravné úkoly a založí jeden `follow_up`. Opakování stejného klíče vrátí původní výsledek; jiný obsah, zastaralá verze nebo nepovolený přechod se odmítnou. `response_received` a `closed` ukončí jen vlastní připomínku vytvořenou při odeslání. Ověřená pozdější odpověď může přejít také z `closed` do `response_received`; předchozí uzavření zůstává v historii. Rozhodnutí nabídky zůstává zachováno.
 
 Přehled K reakci (web i MCP) zahrnuje jen `none`, `preparing`, `awaiting_approval`. Nová stránka Čekáme na odpověď ukazuje `submitted` / `awaiting_response`. Detail nabízí formulář i historii. API `POST /applications/events` a MCP `record_application_event` vyžadují oddělený scope `applications:write`; synchronizační a vykonávací token tento scope nemají. Detail API vrací historii a navazující úkoly vlastníka.
 
@@ -309,7 +309,7 @@ Každý přechod vytvoří historii. Po rychlém kliknutí se zobrazí možnost 
 
 ### 6.2 Průběh žádosti
 
-`none -> preparing -> awaiting_approval -> submitted -> awaiting_response -> response_received -> closed`
+`none -> preparing -> awaiting_approval -> submitted -> awaiting_response -> response_received -> closed`; ověřená pozdější odpověď podporuje také návrat `closed -> response_received`.
 
 Stav rozhodnutí, platnost nabídky, přečtení a workflow jsou nezávislé osy. Nabídka může být například `react`, `active`, `read`, `awaiting_approval`.
 
@@ -460,7 +460,7 @@ Počáteční MCP nástroje budou mapovat doménové operace, nikoli obecný SQL
 - `save_assessment`, `propose_decision`, `set_decision`, `set_decisions_batch`;
 - `list_reaction_queue`, `record_application_event`.
 
-MCP server používá oficiální PHP SDK, standardní řádkový STDIO transport a vlastní `JOBRADAR_MCP_TOKEN`. Přes úzce vymezeného HTTP klienta volá pouze cesty `/api/v1`; nebootuje databázovou vrstvu a nevystavuje obecný HTTP ani SQL nástroj. Implementované nástroje pokrývají zdroje, řízení kontrol, nabídky, frontu k reakci, import verze, posouzení, vytvoření výslovné delegace a atomické jednotlivé i dávkové rozhodnutí. Schémata mutací vyžadují stejné idempotency klíče, ID delegace a očekávané verze jako API; popisy a anotace nástrojů výslovně uvádějí vedlejší účinky a zákaz odeslání žádosti. Scope `decisions:delegate` je oddělený a běžnému MCP tokenu se nevydává, pokud uživatel nechce delegace vytvářet výslovným pokynem přes tento klient.
+MCP server používá oficiální PHP SDK, standardní řádkový STDIO transport a vlastní `JOBRADAR_MCP_TOKEN`. Přes úzce vymezeného HTTP klienta volá pouze cesty `/api/v1`; nebootuje databázovou vrstvu a nevystavuje obecný HTTP ani SQL nástroj. Implementované nástroje pokrývají zdroje, řízení kontrol, nabídky, frontu k reakci, import verze, posouzení, vytvoření výslovné delegace a atomické jednotlivé i dávkové rozhodnutí. Schémata mutací vyžadují stejné idempotency klíče, ID delegace a očekávané verze jako API; popisy a anotace nástrojů výslovně uvádějí vedlejší účinky a zákaz odeslání žádosti. Odmítnutí doménové operace v API vrací MCP jako bezpečný chybový výsledek nástroje s kódem a HTTP stavem; interní odpověď API ani token se do něj nepřenášejí. Scope `decisions:delegate` je oddělený a běžnému MCP tokenu se nevydává, pokud uživatel nechce delegace vytvářet výslovným pokynem přes tento klient.
 
 Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:write`, `opportunities:read`, `opportunities:import`, `assessments:write`, `decisions:recommend`, `decisions:delegate`, `decisions:write`, `applications:write` a `audit:read`. Runner nepotřebuje `decisions:write`; běžný rozhodovací klient nepotřebuje `decisions:delegate` a doporučovací klient nepotřebuje `applications:write`.
 
