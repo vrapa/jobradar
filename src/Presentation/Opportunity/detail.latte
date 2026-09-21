@@ -1,7 +1,7 @@
 {block title}{$opportunity->title}{/block}
 
 {block content}
-<details class="card p-3 mb-3" n:attr="open: $presenter['projectKindForm']->hasErrors()">
+<details n:if="$opportunity->opportunityType === 'offer'" class="card p-3 mb-3" n:attr="open: $presenter['projectKindForm']->hasErrors()">
     <summary>Typ projektu: {if count($opportunity->projectKindHistory) === 0 || $opportunity->projectKindHistory[0]['values'] === null}neověřeno{else}{foreach $opportunity->projectKindHistory[0]['values'] as $value}{if !$iterator->first}, {/if}{App\Opportunity\ProjectKindInput::LABELS[$value]}{/foreach}{/if}</summary>
     {form projectKindForm}
         <div n:if="$form->hasErrors()" class="alert alert-danger mt-3" role="alert"><ul><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
@@ -13,7 +13,7 @@
     {/form}
     <ul><li n:foreach="$opportunity->projectKindHistory as $classification">{$classification['created_at']} · verze nabídky #{$classification['source_version_id']} · {if $classification['values'] === null}neověřeno{else}{foreach $classification['values'] as $value}{if !$iterator->first}, {/if}{App\Opportunity\ProjectKindInput::LABELS[$value]}{/foreach}{/if} · {$classification['reason']} · jistota {$classification['confidence'] ?? 'neznámá'} · ověřeno {$classification['verified_at'] ?? 'neověřeno'}</li></ul>
 </details>
-<details class="card p-3 mb-3" n:attr="open: $presenter['counterpartyForm']->hasErrors()">
+<details n:if="$opportunity->opportunityType === 'offer'" class="card p-3 mb-3" n:attr="open: $presenter['counterpartyForm']->hasErrors()">
     <summary>Protistrana: {App\Opportunity\CounterpartyInput::LABELS[$opportunity->counterpartyHistory[0]['value'] ?? ''] ?? 'neověřeno'}</summary>
     {form counterpartyForm}
     <div n:if="$form->hasErrors()" class="alert alert-danger mt-3" role="alert"><ul><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
@@ -24,7 +24,7 @@
     {/form}
     <ul><li n:foreach="$opportunity->counterpartyHistory as $c">{App\Opportunity\CounterpartyInput::LABELS[$c['value'] ?? ''] ?? 'neověřeno'} · {$c['reason']} · jistota {$c['confidence'] ?? 'neověřeno'} · ověřeno {$c['verified_at'] ?? 'neověřeno'} · verze nabídky #{$c['source_version_id']}</li></ul>
 </details>
-<details class="card p-3 mb-3" n:attr="open: $presenter['projectCareForm']->hasErrors()">
+<details n:if="$opportunity->opportunityType === 'offer'" class="card p-3 mb-3" n:attr="open: $presenter['projectCareForm']->hasErrors()">
     <summary>Převzetí / péče o existující aplikaci: {if count($opportunity->projectCareHistory) === 0 || $opportunity->projectCareHistory[0]['value'] === null}neověřeno{else}{$opportunity->projectCareHistory[0]['value'] ? 'ano' : 'ne'}{/if}</summary>
     {form projectCareForm}
         <div n:if="$form->hasErrors()" class="alert alert-danger mt-3" role="alert"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
@@ -37,26 +37,40 @@
 </details>
 <div n:if="count($opportunity->discoveries) > 0" class="card p-3 mb-3"><h2 class="h6">Cesta nalezení</h2><p n:foreach="$opportunity->discoveries as $d">{$d['source_name']} · {$d['query_text']} · {$d['discovered_at']}</p></div>
 <nav aria-label="Drobečková navigace" class="mb-3">
-    <a n:href="Home:" class="text-decoration-none">Nabídky</a>
+    <a n:href="Home:" class="text-decoration-none">Příležitosti</a>
     <span class="text-body-secondary mx-2" aria-hidden="true">/</span>
     <span aria-current="page">Detail</span>
 </nav>
 
 <header class="mb-4">
     <div class="d-flex flex-wrap gap-2 mb-2">
+        <span class="badge text-bg-primary">{App\Opportunity\OpportunityType::LABELS[$opportunity->opportunityType]}</span>
         <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
-        <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplný obsah nabídky</span>
+        <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplný zdrojový obsah</span>
         <span class="badge text-bg-light border">{$opportunity->versionCount} {if $opportunity->versionCount === 1}verze{else}verzí{/if}</span>
     </div>
     <h1 class="display-6 fw-bold mb-2">{$opportunity->title}</h1>
     <p class="lead text-body-secondary">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>
     <div class="d-flex flex-wrap gap-2">
         <a href="{$opportunity->canonicalUrl}" class="btn btn-outline-primary" rel="noopener noreferrer" target="_blank">Otevřít původní stránku</a>
-        <a n:href="OpportunityTerms: $opportunity->id" class="btn btn-primary">Upravit podmínky</a>
+        <a n:if="$opportunity->opportunityType === 'offer'" n:href="OpportunityTerms: $opportunity->id" class="btn btn-primary">Upravit podmínky</a>
     </div>
 </header>
 
-<section n:if="count($attachmentReviews) > 0" class="card p-3 mb-4">
+<section n:if="$opportunity->opportunityType === 'company_lead'" class="card shadow-sm mb-4" aria-labelledby="lead-contact-title">
+    <div class="card-body">
+        <h2 id="lead-contact-title" class="h5">Firemní kontakt / lead</h2>
+        <dl class="row mb-0">
+            <dt class="col-sm-4">Kontaktní osoba</dt><dd class="col-sm-8">{$opportunity->companyLead['contact_name'] ?? 'Neuvedena'}</dd>
+            <dt class="col-sm-4">Role</dt><dd class="col-sm-8">{$opportunity->companyLead['contact_role'] ?? 'Neznámá'}</dd>
+            <dt class="col-sm-4">Kanál</dt><dd class="col-sm-8">{$opportunity->companyLead['channel'] ?? 'Neuveden'}</dd>
+            <dt class="col-sm-4">Profil nebo konverzace</dt><dd class="col-sm-8">{if ($opportunity->companyLead['profile_url'] ?? null) !== null}<a href="{$opportunity->companyLead['profile_url']}" rel="noopener noreferrer" target="_blank">Otevřít odkaz</a>{else}Neuveden{/if}</dd>
+            <dt class="col-sm-4">Kontext oslovení</dt><dd class="col-sm-8 preserve-lines">{$opportunity->companyLead['context'] ?? 'Neuveden'}</dd>
+        </dl>
+    </div>
+</section>
+
+<section n:if="$opportunity->opportunityType === 'offer' && count($attachmentReviews) > 0" class="card p-3 mb-4">
     <h2 class="h5">Přílohy a podklady</h2>
     <p class="text-body-secondary">Ověření řešíme v projektu Práce. Dokončení navazujícího úkolu samo nepotvrzuje přečtení přílohy.</p>
     <article n:foreach="$attachmentReviews as $attachment" class="border-top pt-3 mb-3">
@@ -83,7 +97,7 @@
     </details>
 </section>
 
-<section class="card shadow-sm mb-4 {if $assessment !== null}border-info-subtle{/if}" aria-labelledby="assessment-title">
+<section n:if="$opportunity->opportunityType === 'offer'" class="card shadow-sm mb-4 {if $assessment !== null}border-info-subtle{/if}" aria-labelledby="assessment-title">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h2 id="assessment-title" class="h5 mb-0">Posouzení a doporučení</h2>
@@ -128,7 +142,7 @@
 <section class="card shadow-sm mb-4" aria-labelledby="action-items-title">
     <div class="card-body">
         <h2 id="action-items-title" class="h5">Navazující úkoly</h2>
-        <p class="small text-body-secondary">Sem patří jen konkrétní krok nebo termín. Nabídka, rozhodnutí a stav žádosti zůstávají v JobRadaru; Todoist je pouze externí připomínka.</p>
+        <p class="small text-body-secondary">Sem patří jen konkrétní krok nebo termín. Aktuální stav příležitosti zůstává v JobRadaru; Todoist je pouze externí připomínka a jeho dokončení samo nemění stav komunikace ani nedokládá odeslání.</p>
         <div n:if="count($actionItems) === 0" class="text-body-secondary mb-3">Zatím není evidován žádný navazující úkol.</div>
         <ul n:if="count($actionItems) > 0" class="list-group mb-3">
             <li n:foreach="$actionItems as $item" class="list-group-item">
@@ -166,7 +180,36 @@
     </div>
 </section>
 
-<section class="card shadow-sm mb-4" aria-labelledby="application-title">
+<section n:if="$opportunity->opportunityType === 'company_lead'" class="card shadow-sm mb-4" aria-labelledby="company-lead-workflow-title">
+    <div class="card-body">
+        <h2 id="company-lead-workflow-title" class="h5">Stav kontaktu: {$companyLeadLabels[$opportunity->companyLeadStatus]}</h2>
+        <p class="text-body-secondary">Připravený text nic neodesílá. „Osloveno“ zaznamenejte až po výslovném schválení a skutečném odeslání s dokladem; pak přejde lead do stavu „Čekáme na odpověď“.</p>
+        <details n:attr="open: $presenter['companyLeadWorkflowForm']->hasErrors()">
+            <summary class="fw-semibold">Oslovit nebo zaznamenat odpověď</summary>
+            {form companyLeadWorkflowForm, class: 'mt-3'}
+                <div n:if="$form->hasErrors()" class="alert alert-danger"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+                <div class="row g-3">
+                    <div class="col-md-6"><label n:name="event" class="form-label">Co se stalo</label><select n:name="event" class="form-select"></select></div>
+                    <div class="col-md-6"><label n:name="occurredAt" class="form-label">Kdy se to stalo (Praha)</label><input n:name="occurredAt" class="form-control"></div>
+                    <div class="col-12"><label n:name="reference" class="form-label">Podklad nebo doklad</label><textarea n:name="reference" class="form-control"></textarea><div class="form-text">U přípravy odkaz na konečný návrh, u oslovení doklad odeslání, u odpovědi odkaz nebo ID přijaté zprávy. Nevkládejte celé soukromé zprávy.</div></div>
+                </div>
+                <fieldset class="border rounded p-3 my-3"><legend class="float-none w-auto fs-6 px-2">Vyplňte pouze pro „Osloveno“</legend>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label n:name="channel" class="form-label">Kanál</label><input n:name="channel" class="form-control"></div>
+                        <div class="col-md-6"><label n:name="followUpAt" class="form-label">Kdy zkontrolovat odpověď</label><input n:name="followUpAt" class="form-control"></div>
+                        <div class="col-12"><label n:name="approvalReference" class="form-label">Odkaz na výslovné schválení</label><input n:name="approvalReference" class="form-control"></div>
+                        <div class="col-12"><label n:name="completeIds" class="form-label">Dokončené přípravné úkoly</label><select n:name="completeIds" class="form-select"></select></div>
+                        <div class="col-12"><label><input n:name="confirmSent" class="form-check-input"> Potvrzuji skutečné schválené oslovení a doklad odeslání.</label></div>
+                    </div>
+                </fieldset>
+                <button n:name="save" class="btn btn-primary">Uložit stav kontaktu</button>
+            {/form}
+        </details>
+        <details n:if="count($companyLeadHistory) > 0" class="mt-3"><summary>Historie kontaktu ({count($companyLeadHistory)})</summary><ol class="mt-2"><li n:foreach="$companyLeadHistory as $event"><strong>{$companyLeadLabels[$event['workflow_status']]}</strong> — {$event['details']['occurred_at']}<br>{$event['details']['reference']}</li></ol></details>
+    </div>
+</section>
+
+<section n:if="$opportunity->opportunityType === 'offer'" class="card shadow-sm mb-4" aria-labelledby="application-title">
     <div class="card-body">
         <h2 id="application-title" class="h5">Stav reakce: {$workflowLabels[$opportunity->decisionState->workflowStatus] ?? $opportunity->decisionState->workflowStatus}</h2>
         <p class="text-body-secondary">Připravený text čeká na schválení. Až po skutečném odeslání přejde nabídka do „Čekáme na odpověď“. Tento formulář pouze zaznamenává stav.</p>
@@ -206,7 +249,18 @@
     </div>
 </section>
 
-<section class="card shadow-sm mb-4 border-primary-subtle" aria-labelledby="decision-title">
+<section n:if="$opportunity->opportunityType === 'offer'" class="card shadow-sm mb-4" aria-labelledby="type-conversion-title">
+    <div class="card-body">
+        <h2 id="type-conversion-title" class="h5">Převod typu</h2>
+        <p class="small text-body-secondary">Použijte jen tehdy, pokud nejde o potvrzenou nabídku, ale o cílený firemní nebo networkingový kontakt. Převod zachová zdroje, odkazy a úkoly; při historii žádosti bude odmítnut.</p>
+        {form opportunityTypeForm}
+            <div n:if="$form->hasErrors()" class="alert alert-danger"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+            <button n:name="convert" class="btn btn-outline-primary">Převést na firemní kontakt / lead</button>
+        {/form}
+    </div>
+</section>
+
+<section n:if="$opportunity->opportunityType === 'offer'" class="card shadow-sm mb-4 border-primary-subtle" aria-labelledby="decision-title">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h2 id="decision-title" class="h5 mb-0">Moje rozhodnutí</h2>

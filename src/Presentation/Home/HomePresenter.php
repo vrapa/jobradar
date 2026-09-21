@@ -26,7 +26,9 @@ final class HomePresenter extends SecuredPresenter
 
     public function renderDefault(): void
     {
-        $items = $this->opportunities->listCurrent((int) $this->getUser()->getId());
+        $type = (string) ($this->getParameter('type') ?? 'all');
+        if (!in_array($type, ['all', ...array_keys(\App\Opportunity\OpportunityType::LABELS)], true)) { $type = 'all'; }
+        $items = $this->opportunities->listCurrent((int) $this->getUser()->getId(), $type === 'all' ? null : $type);
         if ($this->getParameter('decision') === 'undecided') {
             $items = array_values(array_filter($items, static fn ($item): bool => $item->decision === OpportunityDecision::Undecided));
         }
@@ -50,6 +52,7 @@ final class HomePresenter extends SecuredPresenter
             'care' => $care,
             'party' => $party,
             'kind' => $kind,
+            'type' => $type,
             'coverage' => $this->sourceQueries->latestCoverageSummary((int) $this->getUser()->getId()),
             'unresolvedSources' => $this->sourceQueries->unresolvedSources((int) $this->getUser()->getId()),
             'executor' => $this->sourceQueries->executorStatus((int) $this->getUser()->getId()),

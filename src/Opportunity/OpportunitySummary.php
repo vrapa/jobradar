@@ -10,6 +10,7 @@ final readonly class OpportunitySummary
 {
     public function __construct(
         public int $id,
+        public string $opportunityType,
         public string $title,
         public ?string $companyName,
         public ?string $summary,
@@ -18,6 +19,7 @@ final readonly class OpportunitySummary
         public \DateTimeInterface $foundAt,
         public OpportunityDecision $decision,
         public string $workflowStatus,
+        public string $companyLeadStatus,
         public ?string $rateMin,
         public ?string $rateMax,
         public ?string $currency,

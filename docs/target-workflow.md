@@ -4,11 +4,11 @@ Tento dokument popisuje volitelnou integraci; konkrétní projekty, automatizace
 
 ## Jediný zdroj pravdy
 
-Databáze JobRadaru je jediným zdrojem pravdy pro nabídky, zdroje, skutečné pokrytí kontrol, verze textu, podmínky, posouzení, rozhodnutí, navazující kroky a stav žádosti. Todoist ani Markdown nesmí vytvářet paralelní seznam nabídek.
+Databáze JobRadaru je jediným zdrojem pravdy pro nabídky, firemní leady, tendery, zdroje, skutečné pokrytí kontrol, verze textu, podmínky, posouzení, rozhodnutí, navazující kroky a stav žádosti či kontaktu. Todoist ani Markdown nesmí vytvářet paralelní seznam příležitostí.
 
 Soukromý projekt uchovává dlouhodobý soukromý profil, CV, komunikační pravidla, šablony, vytvořené dokumenty, podklady k pohovorům a dočasně historické Markdownové účtenky již odeslaných žádostí. Tyto soubory nejsou operativní fronta. Po ověřené migraci zůstávají historickým archivem; novější stav se čte z JobRadaru.
 
-Todoist obsahuje pouze konkrétní proveditelný krok nebo termín. Každý pracovní Todoist úkol musí mít odpovídající `action_item` v JobRadaru a po vytvoření se k němu uloží provider, externí ID a URL. Přechod na `Reagovat` u dosud nepřipravené žádosti zajistí jeden společný otevřený `prepare_applications` pro vlastníka. Další vybrané nabídky sdílejí tento krok; synchronizace jej přenese do Todoistu bez duplicit.
+Todoist obsahuje pouze konkrétní proveditelný krok nebo termín. Každý pracovní Todoist úkol musí mít odpovídající `action_item` v JobRadaru a po vytvoření se k němu uloží provider, externí ID a URL. Přechod na `Reagovat` u dosud nepřipravené žádosti zajistí jeden společný otevřený `prepare_applications` pro vlastníka. Další vybrané nabídky sdílejí tento krok; synchronizace jej přenese do Todoistu bez duplicit. U firemních leadů se zrcadlí pouze konkrétní kroky `prepare_outreach`, `reply` a `follow_up`; stav kontaktu zůstává výhradně v JobRadaru.
 
 ## Tok kontroly zdrojů
 
@@ -22,7 +22,7 @@ Todoist obsahuje pouze konkrétní proveditelný krok nebo termín. Každý prac
 
 1. Konkrétní krok vzniká v JobRadaru jako `action_item`, například ověřit sazbu, zkontrolovat připravenou žádost, odpovědět do data, provést follow-up nebo přihlásit se na portál.
 2. Synchronizace načte pouze otevřené položky bez externí vazby, zkontroluje duplicitu podle ID `action_item`, vytvoří Todoist úkol v nakonfigurovaném projektu a uloží jeho ID a URL zpět do JobRadaru.
-3. Dokončení Todoist úkolu smí uzavřít pouze odpovídající `action_item`. Nesmí změnit rozhodnutí nabídky, stav žádosti ani vytvořit potvrzení o odeslání.
+3. Dokončení Todoist úkolu smí uzavřít pouze odpovídající `action_item`. Nesmí změnit rozhodnutí nabídky, stav žádosti ani stav komunikace s firemním leadem a nesmí vytvořit potvrzení o odeslání.
 4. Volitelná e-mailová integrace propojí ověřenou odpověď s existující nabídkou. Samotný e-mail bez úplného detailu není novou nabídkou.
 
 ## Příprava a odeslání žádosti
@@ -33,6 +33,19 @@ Implementovaný postup, API a zápis ze soukromého projektu: [Reakce a čekán�
 2. Před odesláním se uživateli ukáže konečný obsah, cílová nabídka, použitá identita, přílohy, sazba a případné souhlasy. Bez výslovného schválení se nic neodešle.
 3. Stav `submitted` smí vzniknout až po konkrétním potvrzení portálu nebo po ověřeném záznamu odeslaného e-mailu. Kliknutí na tlačítko ani dokončení Todoist úkolu nestačí.
 4. Historické podklady uchovávat soukromě; aktuální operativní stav se čte z JobRadaru.
+
+## Firemní kontakty a networking
+
+Firemní kontakt / lead je samostatná příležitost typu `company_lead`, nikoli pracovní nabídka. Nepoužívá rozhodnutí `Reagovat`, frontu pracovních žádostí ani `application_events`.
+
+1. Nový lead může uchovávat firmu a volitelně kontaktní osobu, její roli, kanál, bezpečný odkaz na profil či konverzaci a stručný kontext. Neznámé údaje zůstávají `NULL`.
+2. Událost `prepared` uloží pouze odkaz na připravený text a přesune lead do „Připraveno ke schválení“. Nic neposílá.
+3. „Osloveno“ lze zaznamenat pouze s odkazem na výslovné schválení, skutečným časem, kanálem a dokladem odeslání. Povinný termín kontroly vytvoří jeden `follow_up` action item a stav přejde na „Čekáme na odpověď“.
+4. Ověřená odpověď dokončí follow-up vytvořený tímto oslovením a přejde na „Odpověď přijata“. Podle obsahu lze samostatně vytvořit konkrétní `reply` action item. Pozdní odpověď po uzavření lead znovu otevře do „Odpověď přijata“.
+5. Dokončení `action_item` v Todoistu nikdy samo nepřepne stav kontaktu a není dokladem odeslání. Žádná operace JobRadaru sama neposílá LinkedIn zprávu ani e-mail.
+6. Pokud z kontaktu vznikne konkrétní pracovní nabídka, založí se samostatná příležitost typu `offer`. Záznamy lze propojit, ale jejich historie žádosti a oslovení se neslučuje.
+
+Pouhé přijetí LinkedIn spojení není důvodem k zápisu. `company_lead` vzniká až při cíleném pracovním či obchodním oslovení, věcném dotazu nebo odpovědi vyžadující další krok.
 
 ## Automatizace
 

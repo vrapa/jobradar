@@ -10,6 +10,7 @@ final class OpportunityJsonMapper
         'url', 'originalTitle', 'originalText', 'companyName', 'translatedTitle',
         'translatedText', 'summary', 'sourceLanguage', 'incomplete',
         'projectCare', 'discoveryDefinitionId', 'counterparty', 'attachmentReviews', 'projectKinds',
+        'opportunityType', 'companyLead',
     ];
 
     public function __construct(private readonly UrlNormalizer $urlNormalizer)
@@ -60,6 +61,8 @@ final class OpportunityJsonMapper
                 counterparty: CounterpartyInput::fromPayload($item['counterparty'] ?? null),
                 attachmentReviews: AttachmentReviewInput::parse($item['attachmentReviews'] ?? []),
                 projectKinds: ProjectKindInput::fromPayload($item['projectKinds'] ?? null),
+                opportunityType: $this->optionalString($item, 'opportunityType', $index) ?? OpportunityType::OFFER,
+                companyLead: CompanyLeadInput::fromPayload($item['companyLead'] ?? null),
             );
         }
 

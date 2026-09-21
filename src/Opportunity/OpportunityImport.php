@@ -22,7 +22,13 @@ final readonly class OpportunityImport
         /** @var list<array<string,mixed>> */
         public array $attachmentReviews = [],
         public ?ProjectKindInput $projectKinds = null,
+        public string $opportunityType = OpportunityType::OFFER,
+        public ?CompanyLeadInput $companyLead = null,
     ) {
+        OpportunityType::validate($opportunityType);
+        if ($opportunityType !== OpportunityType::COMPANY_LEAD && $companyLead !== null) {
+            throw new \InvalidArgumentException('Kontaktní údaje lze uložit pouze k firemnímu leadu.');
+        }
         AttachmentReviewInput::parse($attachmentReviews);
         if ($discoveryDefinitionId !== null && $discoveryDefinitionId < 1) { throw new \InvalidArgumentException('Neplatná definice nalezení.'); }
         if (trim($this->originalTitle) === '') {

@@ -48,9 +48,10 @@ final class JobRadarMcpTools
         return $this->call(fn (): array => $this->api->post('/search-requests/' . $requestId . '/cancel'));
     }
 
-    public function listOpportunities(): CallToolResult
+    public function listOpportunities(?string $opportunityType = null): CallToolResult
     {
-        return $this->call(fn (): array => $this->api->get('/opportunities'));
+        $path = '/opportunities' . ($opportunityType === null ? '' : '?opportunity_type=' . rawurlencode($opportunityType));
+        return $this->call(fn (): array => $this->api->get($path));
     }
 
     public function listReactionQueue(): CallToolResult
@@ -63,7 +64,8 @@ final class JobRadarMcpTools
             }
             $items = array_values(array_filter(
                 $data,
-                static fn (mixed $item): bool => is_array($item) && ($item['decision'] ?? null) === 'react'
+                static fn (mixed $item): bool => is_array($item) && ($item['opportunity_type'] ?? 'offer') === 'offer'
+                    && ($item['decision'] ?? null) === 'react'
                     && in_array($item['workflow_status'] ?? 'none', ['none', 'preparing', 'awaiting_approval'], true),
             ));
             return ['data' => $items, 'meta' => ['count' => count($items)]];
@@ -138,6 +140,18 @@ final class JobRadarMcpTools
     public function recordApplicationEvent(int $opportunityId, array $event): CallToolResult
     {
         return $this->call(fn (): array => $this->api->post('/applications/events', [...$event, 'opportunity_id' => $opportunityId]));
+    }
+
+    /** @param array<string,mixed> $event */
+    public function recordCompanyLeadEvent(int $opportunityId, array $event): CallToolResult
+    {
+        return $this->call(fn (): array => $this->api->post('/company-leads/events', [...$event, 'opportunity_id' => $opportunityId]));
+    }
+
+    /** @param array<string,mixed> $conversion */
+    public function convertOpportunityType(int $opportunityId, array $conversion): CallToolResult
+    {
+        return $this->call(fn (): array => $this->api->put('/opportunities/' . $opportunityId . '/type', $conversion));
     }
 
     public function listLinkedActionItems(): CallToolResult

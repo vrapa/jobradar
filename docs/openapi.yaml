@@ -45,6 +45,45 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { description: Stale state version or conflicting idempotency key }
         '422': { description: Missing evidence, invalid timestamp, foreign action or forbidden transition }
+  /company-leads/events:
+    post:
+      operationId: recordCompanyLeadEvent
+      summary: Record preparation, proven approved outreach, received response or closure; never sends anything
+      description: Requires company_leads:write. Uses a company-lead-specific lock and history, never application_events. Contacted requires channel, approval_reference, sending evidence, actual occurred_at and a later follow_up_at. A verified response completes the outreach follow-up. A verified late response may reopen closed to response_received.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [opportunity_id, event, expected_lock_version, idempotency_key, reference, occurred_at]
+              properties:
+                opportunity_id: { type: integer, minimum: 1 }
+                event: { type: string, enum: [prepared, contacted, response_received, closed] }
+                expected_lock_version: { type: integer, minimum: 0 }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+                reference: { type: string, minLength: 1, maxLength: 2000 }
+                occurred_at: { type: string, format: date-time }
+                channel: { type: string, minLength: 1, maxLength: 100 }
+                approval_reference: { type: string, minLength: 1, maxLength: 2000 }
+                follow_up_at: { type: string, format: date-time }
+                complete_action_item_ids:
+                  type: array
+                  maxItems: 100
+                  items: { type: integer, minimum: 1 }
+              allOf:
+                - if:
+                    properties:
+                      event: { const: contacted }
+                  then:
+                    required: [channel, approval_reference, follow_up_at]
+      responses:
+        '200': { description: Recorded lead event with workflow_status, lock_version, follow_up_action_item_id and sent_by_this_operation=false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Stale state version or conflicting idempotency key }
+        '422': { description: Missing evidence, invalid timestamp, foreign action or forbidden transition }
   /action-items/linked:
     get:
       operationId: listLinkedActionItems
@@ -161,6 +200,11 @@ paths:
       tags: [opportunities]
       security:
         - bearerAuth: []
+      parameters:
+        - name: opportunity_type
+          in: query
+          required: false
+          schema: { type: string, enum: [offer, company_lead, tender] }
       responses:
         '200':
           description: Current non-archived opportunities
@@ -270,6 +314,35 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/InvalidTransition' }
         '422': { $ref: '#/components/responses/InvalidRequest' }
+  /opportunities/{id}/type:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    put:
+      operationId: convertOpportunityType
+      summary: Auditably convert an offer without application history to a company lead
+      description: Requires company_leads:write and opportunities.lock_version. Preserves source versions, source links and action items. Rejects any application event or non-none application workflow.
+      tags: [company-leads]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [opportunity_type, expected_lock_version]
+              properties:
+                opportunity_type: { type: string, const: company_lead }
+                expected_lock_version: { type: integer, minimum: 1 }
+                company_lead: { $ref: '#/components/schemas/CompanyLeadInput' }
+      responses:
+        '200': { description: Converted type and incremented lock_version }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Stale opportunity lock_version }
+        '422': { description: Wrong source type or conflicting application history }
   /decision-delegations:
     post:
       operationId: createDecisionDelegation
@@ -696,7 +769,7 @@ components:
         id: { type: integer, minimum: 1 }
         user_id: { type: integer, minimum: 1 }
         opportunity_id: { type: [integer, 'null'], minimum: 1 }
-        action_type: { type: string, enum: [verify_terms, review_application, reply, follow_up, login, other] }
+        action_type: { type: string, enum: [prepare_applications, prepare_outreach, review_opportunities, verify_attachment, verify_terms, review_application, reply, follow_up, login, other] }
         title: { type: string, minLength: 1, maxLength: 255 }
         details: { type: [string, 'null'] }
         due_at: { type: [string, 'null'], format: date-time }
@@ -721,6 +794,7 @@ components:
       additionalProperties: false
       required: [url, originalTitle, originalText]
       properties:
+        opportunityType: { type: string, enum: [offer, company_lead, tender], default: offer }
         url:
           type: string
           minLength: 1
@@ -749,6 +823,18 @@ components:
             reason: { type: [string, 'null'] }
             confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
             verifiedAt: { type: [string, 'null'], format: date-time }
+        companyLead:
+          $ref: '#/components/schemas/CompanyLeadInput'
+    CompanyLeadInput:
+      type: [object, 'null']
+      additionalProperties: false
+      description: Optional contact facts for company_lead only. Unknown fields remain null.
+      properties:
+        contactName: { type: [string, 'null'], maxLength: 255 }
+        contactRole: { type: [string, 'null'], maxLength: 255 }
+        channel: { type: [string, 'null'], maxLength: 100 }
+        profileUrl: { type: [string, 'null'], format: uri, maxLength: 2048 }
+        context: { type: [string, 'null'], maxLength: 65535 }
     CounterpartyInput:
       type: [object, 'null']
       additionalProperties: false
@@ -799,9 +885,10 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 200 }
     OpportunitySummary:
       type: object
-      required: [id, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, project_kinds, rate, workload, assessment]
+      required: [id, opportunity_type, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, company_lead_status, project_kinds, rate, workload, assessment]
       properties:
         id: { type: integer, minimum: 1 }
+        opportunity_type: { type: string, enum: [offer, company_lead, tender] }
         title: { type: string }
         company_name: { type: [string, 'null'] }
         summary: { type: [string, 'null'] }
@@ -810,6 +897,7 @@ components:
         found_at: { type: string, format: date-time }
         decision: { type: string, enum: [undecided, react, uninteresting] }
         workflow_status: { type: string }
+        company_lead_status: { type: string, enum: [new, awaiting_approval, awaiting_response, response_received, closed] }
         project_care: { type: [boolean, 'null'], description: 'Převzetí či péče o existující aplikaci; null znamená neověřeno.' }
         counterparty: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
         project_kinds:
@@ -843,7 +931,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/OpportunitySummary'
         - type: object
-          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, project_kind_history, terms, technologies, versions, decision_state, current_assessment]
+          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, company_lead, company_lead_status, company_lead_lock_version, project_kind_history, terms, technologies, versions, decision_state, current_assessment]
           properties:
             original_title: { type: string }
             translated_title: { type: [string, 'null'] }
@@ -854,6 +942,16 @@ components:
             acquired_at: { type: string, format: date-time }
             version_count: { type: integer, minimum: 1 }
             lock_version: { type: integer, minimum: 1 }
+            company_lead:
+              type: [object, 'null']
+              properties:
+                contact_name: { type: [string, 'null'] }
+                contact_role: { type: [string, 'null'] }
+                channel: { type: [string, 'null'] }
+                profile_url: { type: [string, 'null'], format: uri }
+                context: { type: [string, 'null'] }
+            company_lead_status: { type: string, enum: [new, awaiting_approval, awaiting_response, response_received, closed] }
+            company_lead_lock_version: { type: integer, minimum: 0 }
             project_care_history:
               type: array
               description: Nejnovější klasifikace první; vynechaný příznak při importu historii nemění.

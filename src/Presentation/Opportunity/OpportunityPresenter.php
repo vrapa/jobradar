@@ -6,6 +6,7 @@ namespace App\Presentation\Opportunity;
 
 use App\Assessment\AssessmentQueryService;
 use App\Action\ActionItemService;
+use App\CompanyLead\CompanyLeadWorkflowService;
 use App\Decision\OpportunityDecision;
 use App\Decision\OpportunityDecisionService;
 use App\Decision\DecisionQueryService;
@@ -30,6 +31,8 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly ActionItemService $actionItems,
         private readonly \App\Opportunity\AttachmentReviewService $attachments,
         private readonly \App\Application\ApplicationWorkflowService $workflow,
+        private readonly CompanyLeadWorkflowService $companyLeadWorkflow,
+        private readonly \App\Opportunity\OpportunityTypeService $opportunityTypes,
     ) {
         parent::__construct();
     }
@@ -48,8 +51,10 @@ final class OpportunityPresenter extends SecuredPresenter
             'decisionHistory' => $this->decisionQueries->history((int) $this->getUser()->getId(), $id),
             'actionItems' => $actionItems,
             'attachmentReviews' => $this->attachments->listForOpportunity((int) $this->getUser()->getId(), $id),
-            'applicationHistory' => $this->workflow->history((int) $this->getUser()->getId(), $id),
+            'applicationHistory' => $opportunity->opportunityType === \App\Opportunity\OpportunityType::OFFER ? $this->workflow->history((int) $this->getUser()->getId(), $id) : [],
             'workflowLabels' => \App\Application\ApplicationWorkflowService::LABELS,
+            'companyLeadHistory' => $opportunity->opportunityType === \App\Opportunity\OpportunityType::COMPANY_LEAD ? $this->companyLeadWorkflow->history((int) $this->getUser()->getId(), $id) : [],
+            'companyLeadLabels' => CompanyLeadWorkflowService::LABELS,
             'openActionItemCount' => count(array_filter($actionItems, static fn (array $item): bool => $item['status'] === 'open')),
         ]);
 
@@ -222,7 +227,7 @@ final class OpportunityPresenter extends SecuredPresenter
                 $form->addError($exception->getMessage());
                 return;
             }
-            $this->flashMessage('Stav navazujícího úkolu byl uložen. Rozhodnutí ani stav žádosti se nezměnily.', 'success');
+            $this->flashMessage('Stav navazujícího úkolu byl uložen. Stav příležitosti ani komunikace se nezměnil.', 'success');
             $this->redirect('this');
         };
         return $form;
@@ -273,6 +278,85 @@ final class OpportunityPresenter extends SecuredPresenter
             try { $this->counterparty->save($this->opportunityId, (int) $v['lockVersion'], \App\Opportunity\CounterpartyForm::read($v), (int) $this->getUser()->getId()); }
             catch (\InvalidArgumentException|OpportunityConflictException $e) { $form->addError($e->getMessage()); return; }
             $this->flashMessage('Klasifikace uložena do historie.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
+    protected function createComponentCompanyLeadWorkflowForm(): Form
+    {
+        $userId = (int) $this->getUser()->getId();
+        $lead = $this->opportunities->getDetail($this->opportunityId, $userId);
+        if ($lead === null || $lead->opportunityType !== \App\Opportunity\OpportunityType::COMPANY_LEAD) {
+            $this->error('Firemní kontakt / lead nebyl nalezen.');
+        }
+        $form = new Form();
+        $form->addHidden('lockVersion', (string) $lead->companyLeadLockVersion);
+        $form->addHidden('idempotencyKey', bin2hex(random_bytes(16)));
+        $events = match ($lead->companyLeadStatus) {
+            'new' => ['prepared' => 'Připraveno ke schválení', 'closed' => 'Uzavřeno'],
+            'awaiting_approval' => ['prepared' => 'Aktualizováno ke schválení', 'contacted' => 'Osloveno', 'closed' => 'Uzavřeno'],
+            'awaiting_response' => ['response_received' => 'Odpověď přijata', 'closed' => 'Uzavřeno'],
+            'closed' => ['response_received' => 'Odpověď přijata po uzavření'],
+            default => ['closed' => 'Uzavřeno'],
+        };
+        $form->addSelect('event', 'Co se stalo', $events)->setRequired();
+        $form->addTextArea('reference', 'Podklad nebo doklad')->setRequired()->setMaxLength(2000);
+        $zone = new \DateTimeZone('Europe/Prague');
+        $form->addText('occurredAt', 'Kdy se to stalo (Praha)')->setHtmlType('datetime-local')->setRequired()->setDefaultValue((new \DateTimeImmutable('now', $zone))->format('Y-m-d\TH:i'));
+        $form->addText('channel', 'Kanál oslovení')->setMaxLength(100)->setHtmlAttribute('placeholder', 'LinkedIn, e-mail');
+        $form->addText('approvalReference', 'Kde je výslovné schválení oslovení')->setMaxLength(2000);
+        $form->addCheckbox('confirmSent', 'Potvrzuji, že schválené oslovení bylo skutečně odesláno a mám doklad odeslání.');
+        $form->addText('followUpAt', 'Kdy zkontrolovat odpověď (Praha)')->setHtmlType('datetime-local')->setDefaultValue((new \DateTimeImmutable('+7 days', $zone))->format('Y-m-d\TH:i'));
+        $options = [];
+        foreach ($this->actionItems->listForOpportunity($userId, $this->opportunityId) as $item) {
+            if ($item['status'] === 'open' && $item['action_type'] !== 'follow_up') {
+                $options[(int) $item['id']] = (string) $item['title'];
+            }
+        }
+        $form->addMultiSelect('completeIds', 'Přípravné úkoly dokončené oslovením', $options);
+        $form->addProtection();
+        $form->addSubmit('save', 'Uložit stav kontaktu');
+        $form->onSuccess[] = function (Form $form) use ($userId): void {
+            $values = (array) $form->getValues();
+            try {
+                $input = ['event' => (string) $values['event'], 'expected_lock_version' => (int) $values['lockVersion'], 'idempotency_key' => (string) $values['idempotencyKey'], 'reference' => (string) $values['reference'], 'occurred_at' => self::localTime((string) $values['occurredAt'])];
+                if ($values['event'] === 'contacted') {
+                    if (!$values['confirmSent']) {
+                        throw new \InvalidArgumentException('Potvrďte skutečné schválené oslovení. Připravený text nestačí.');
+                    }
+                    $input += ['channel' => (string) $values['channel'], 'approval_reference' => (string) $values['approvalReference'], 'follow_up_at' => self::localTime((string) $values['followUpAt']), 'complete_action_item_ids' => array_map(intval(...), $values['completeIds'])];
+                }
+                $this->companyLeadWorkflow->record($userId, $this->opportunityId, $input);
+            } catch (\InvalidArgumentException|OpportunityConflictException $exception) {
+                $form->addError($exception->getMessage());
+                return;
+            }
+            $this->flashMessage($values['event'] === 'contacted' ? 'Oslovení bylo zaznamenáno. Čekáme na odpověď; follow-up se může synchronizovat do Todoistu.' : 'Stav firemního kontaktu byl uložen.', 'success');
+            $this->redirect('this');
+        };
+        return $form;
+    }
+
+    protected function createComponentOpportunityTypeForm(): Form
+    {
+        $opportunity = $this->opportunities->getDetail($this->opportunityId, (int) $this->getUser()->getId());
+        if ($opportunity === null || $opportunity->opportunityType !== \App\Opportunity\OpportunityType::OFFER) {
+            $this->error('Pracovní nabídka nebyla nalezena.');
+        }
+        $form = new Form();
+        $form->addHidden('lockVersion', (string) $opportunity->lockVersion);
+        $form->addProtection();
+        $form->addSubmit('convert', 'Převést na firemní kontakt / lead');
+        $form->onSuccess[] = function (Form $form): void {
+            $values = (array) $form->getValues();
+            try {
+                $this->opportunityTypes->convertOfferToCompanyLead((int) $this->getUser()->getId(), $this->opportunityId, (int) $values['lockVersion']);
+            } catch (\InvalidArgumentException|OpportunityConflictException $exception) {
+                $form->addError($exception->getMessage());
+                return;
+            }
+            $this->flashMessage('Příležitost byla auditovaně převedena na firemní kontakt / lead. Zdrojové verze, odkazy a navazující úkoly zůstaly zachované.', 'success');
             $this->redirect('this');
         };
         return $form;

@@ -13,7 +13,7 @@ final class ActionIntegrationProfileTest extends TestCase
     {
         self::assertSame('Application workflow', ActionIntegrationProfile::clientName(true));
         self::assertSame(
-            ['applications:write', 'opportunities:read', 'opportunities:import', 'action_items:read'],
+            ['applications:write', 'company_leads:write', 'opportunities:read', 'opportunities:import', 'action_items:read'],
             ActionIntegrationProfile::scopes(true),
         );
     }

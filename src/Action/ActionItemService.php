@@ -12,6 +12,7 @@ final class ActionItemService
 {
     public const TYPES = [
         'prepare_applications' => 'Připravit reakce na nabídky',
+        'prepare_outreach' => 'Připravit oslovení',
         'review_opportunities' => 'Posoudit nové nabídky',
         'verify_attachment' => 'Prověřit přílohu',
         'verify_terms' => 'Ověřit podmínky',
@@ -47,7 +48,7 @@ final class ActionItemService
             throw new \InvalidArgumentException('Původ úkolu není platný.');
         }
         if ($opportunityId !== null && !$this->database->fetchField('SELECT 1 FROM opportunities WHERE id = ? AND archived_at IS NULL', $opportunityId)) {
-            throw new \InvalidArgumentException('Nabídka pro navazující úkol nebyla nalezena.');
+            throw new \InvalidArgumentException('Příležitost pro navazující úkol nebyla nalezena.');
         }
 
         $now = self::now();

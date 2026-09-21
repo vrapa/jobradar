@@ -17,6 +17,7 @@ final class OpportunityTransformer
     {
         return [
             'id' => $opportunity->id,
+            'opportunity_type' => $opportunity->opportunityType,
             'title' => $opportunity->title,
             'company_name' => $opportunity->companyName,
             'summary' => $opportunity->summary,
@@ -25,6 +26,7 @@ final class OpportunityTransformer
             'found_at' => $opportunity->foundAt->format(DATE_ATOM),
             'decision' => $opportunity->decision->value,
             'workflow_status' => $opportunity->workflowStatus,
+            'company_lead_status' => $opportunity->companyLeadStatus,
             'project_care' => $opportunity->projectCare,
             'counterparty' => $opportunity->counterparty,
             'project_kinds' => $opportunity->projectKinds,
@@ -53,6 +55,7 @@ final class OpportunityTransformer
     {
         return [
             'id' => $opportunity->id,
+            'opportunity_type' => $opportunity->opportunityType,
             'title' => $opportunity->title,
             'original_title' => $opportunity->originalTitle,
             'translated_title' => $opportunity->translatedTitle,
@@ -67,6 +70,9 @@ final class OpportunityTransformer
             'found_at' => $opportunity->foundAt->format(DATE_ATOM),
             'decision' => $opportunity->decisionState->decision->value,
             'workflow_status' => $opportunity->decisionState->workflowStatus,
+            'company_lead' => $opportunity->companyLead,
+            'company_lead_status' => $opportunity->companyLeadStatus,
+            'company_lead_lock_version' => $opportunity->companyLeadLockVersion,
             'project_care_history' => $opportunity->projectCareHistory,
             'counterparty' => $opportunity->counterpartyHistory[0]['value'] ?? null,
             'counterparty_history' => $opportunity->counterpartyHistory,

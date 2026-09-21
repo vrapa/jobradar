@@ -68,8 +68,8 @@ final class ApplicationWorkflowService
         $hash = hash('sha256', $opportunityId . ':' . $json);
 
         return $this->database->transaction(function () use ($userId, $opportunityId, $input, $event, $key, $hash, $json, $actor, $now, $occurredAt, $followUp, $completeIds): array {
-            $state = $this->database->fetch('SELECT s.* FROM user_opportunity_state s JOIN opportunities o ON o.id=s.opportunity_id WHERE s.user_id=? AND s.opportunity_id=? AND o.archived_at IS NULL FOR UPDATE', $userId, $opportunityId);
-            if (!$state instanceof Row) { throw new \InvalidArgumentException('Nejdříve u nabídky zvolte Reagovat.'); }
+            $state = $this->database->fetch("SELECT s.* FROM user_opportunity_state s JOIN opportunities o ON o.id=s.opportunity_id WHERE s.user_id=? AND s.opportunity_id=? AND o.opportunity_type='offer' AND o.archived_at IS NULL FOR UPDATE", $userId, $opportunityId);
+            if (!$state instanceof Row) { throw new \InvalidArgumentException('Pracovní nabídka nebyla nalezena nebo u ní nejprve zvolte Reagovat.'); }
             $existing = $this->database->fetch('SELECT request_hash,result_json FROM application_events WHERE user_id=? AND idempotency_key=?', $userId, $key);
             if ($existing instanceof Row) {
                 if ($existing['request_hash'] !== $hash) { throw new OpportunityConflictException('Klíč byl použit pro jinou událost.'); }

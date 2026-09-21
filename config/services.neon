@@ -31,6 +31,7 @@ services:
 		factory: App\Console\RunWorkerOnceCommand
 	- App\Opportunity\UrlNormalizer
 	- App\Opportunity\OpportunityImportService
+	- App\Opportunity\OpportunityTypeService
 	- App\Opportunity\ProjectCareService
 	- App\Opportunity\CounterpartyService
 	- App\Opportunity\ProjectKindService
@@ -40,6 +41,7 @@ services:
 	- App\Opportunity\AttachmentReviewService
 	- App\Action\ActionItemService(appUrl: %app.url%)
 	- App\Application\ApplicationWorkflowService
+	- App\CompanyLead\CompanyLeadWorkflowService
 	- App\Decision\OpportunityDecisionService
 	- App\Decision\DecisionQueryService
 	- App\Decision\DecisionDelegationService
@@ -86,6 +88,8 @@ services:
 	- App\Api\V1\LinkExternalTaskHandler
 	- App\Api\V1\CompleteActionItemHandler
 	- App\Api\V1\RecordApplicationEventHandler
+	- App\Api\V1\RecordCompanyLeadEventHandler
+	- App\Api\V1\ConvertOpportunityTypeHandler
 	- App\Api\V1\ListLinkedActionItemsHandler
 	- App\Api\V1\AcknowledgeActionItemHandler
 	- Tomaj\NetteApi\Misc\IpDetector
@@ -143,6 +147,10 @@ services:
 		factory: App\Api\Auth\ScopedBearerAuthorization
 		arguments:
 			requiredScope: 'applications:write'
+	companyLeadsWriteApiAuthorization:
+		factory: App\Api\Auth\ScopedBearerAuthorization
+		arguments:
+			requiredScope: 'company_leads:write'
 	apiDecider:
 		factory: Tomaj\NetteApi\ApiDecider
 		setup:
@@ -165,6 +173,8 @@ services:
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'decision-delegations', 'decisions'), 'App\Api\V1\ApplyDecisionDelegationHandler', @decisionsWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'action-items'), 'App\Api\V1\ListActionItemsHandler', @actionItemsReadApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'applications', 'events'), 'App\Api\V1\RecordApplicationEventHandler', @applicationsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'company-leads', 'events'), 'App\Api\V1\RecordCompanyLeadEventHandler', @companyLeadsWriteApiAuthorization)
+			- addApi(\Tomaj\NetteApi\EndpointIdentifier('PUT', '1', 'opportunities', 'type'), 'App\Api\V1\ConvertOpportunityTypeHandler', @companyLeadsWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('GET', '1', 'action-items', 'linked'), 'App\Api\V1\ListLinkedActionItemsHandler', @actionItemsReadApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'action-items', 'synced'), 'App\Api\V1\AcknowledgeActionItemHandler', @actionItemsWriteApiAuthorization)
 			- addApi(\Tomaj\NetteApi\EndpointIdentifier('POST', '1', 'action-items', 'external-task'), 'App\Api\V1\LinkExternalTaskHandler', @actionItemsWriteApiAuthorization)

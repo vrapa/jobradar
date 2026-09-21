@@ -40,6 +40,8 @@ Migrace `016_application_workflow.sql` zavádí auditované idempotentní událo
 
 Přehled K reakci (web i MCP) zahrnuje jen `none`, `preparing`, `awaiting_approval`. Nová stránka Čekáme na odpověď ukazuje `submitted` / `awaiting_response`. Detail nabízí formulář i historii. API `POST /applications/events` a MCP `record_application_event` vyžadují oddělený scope `applications:write`; klient pracovního postupu žádostí má navíc `opportunities:import`, aby mohl verzovaným importem opravit odvozené údaje nabídky po doložené odpovědi. Import nemění rozhodnutí ani stav žádosti. Synchronizační a vykonávací token scope pracovního postupu nemají. Detail API vrací historii a navazující úkoly vlastníka.
 
+Firemní leady používají oddělené API `POST /company-leads/events`, MCP `record_company_lead_event` a scope `company_leads:write`. Převod bez application historie obsluhuje `PUT /opportunities/{id}/type` a MCP `convert_opportunity_type`. Ani jeden nástroj nic externě neposílá; `contacted` je pouze audit již skutečně provedeného a doloženého oslovení.
+
 Todoist synchronizace navíc čte `GET /action-items/linked`: otevřené propojené kroky a uzavřené kroky s dosud nepotvrzenou synchronizací. Pro ověřené uzavření používá `POST /action-items/synced`; jeho vstupní JSON schema přijímá jen vlastněný propojený krok a stav `open`, `completed` nebo `cancelled`. Hotový lokální krok se uzavře v Todoistu; ověřeně hotový Todoist krok se uzavře jen jako action_item. Dokončení přípravy se vybírá explicitně, nikoli odhadem podle názvu. Pracovní postup pro soukromý projekt je v `docs/application-workflow.md`.
 
 Integrace navazujících úkolů a hranice soukromých podkladů popisuje [cílové workflow](target-workflow.md). Přenos do externího správce úkolů vyžaduje souhlas vlastníka instance.
@@ -192,6 +194,10 @@ Soukromý provozní balíček instance obsahuje verzovaný profil, komunikační
 |---|---|
 | `companies` | název, normalizovaný název, země, web, velikost pokud doložena, poznámky |
 | `opportunities` | typ `offer/company_lead/tender`, společnost, kanonická URL, stav platnosti, datum nalezení, zveřejnění a posledního ověření, aktuální verze, optimistický `lock_version` |
+| `company_lead_details` | volitelné jméno kontaktní osoby, role, kanál, odkaz na profil či konverzaci a stručný kontext; neznámé hodnoty jsou `NULL` |
+| `company_lead_states` | samostatný uživatelský stav oslovení a optimistický `lock_version`; nepoužívá rozhodnutí pracovních žádostí |
+| `company_lead_events` | audit přípravy, doloženého schváleného oslovení, přijaté odpovědi a uzavření; nikdy nejde o `application_events` |
+| `opportunity_type_history` | auditovaný převod typu včetně předchozí a nové verze optimistického zámku |
 | `opportunity_sources` | vazba nabídky na zdroj, zdrojové ID, URL, první a poslední výskyt; unikátní `(source_id, external_id)` a normalizovaná URL |
 | `source_versions` | získaný čas, hash obsahu, jazyk, původní a český titulek, úplný originál, úplný český překlad, shrnutí, stav a metoda překladu, příznak neúplnosti |
 | `opportunity_terms` | sazba od/do, měna, jednotka, režim, původ údaje, jistota, kurz a datum kurzu, orientační Kč/h, rozsah, délka, nástup, remote, práce z ČR, lokalita, časové pásmo, pracovní jazyk, komunikační režim |
@@ -203,7 +209,11 @@ Originál a překlad vždy patří ke konkrétní `source_version`. Nový text n
 
 Neznámé podmínky nabídky jsou v relačním modelu `NULL`; nevytvářejí se z nich nulové sazby, nulový rozsah ani potvrzené boolean hodnoty. Strukturované podmínky jsou svázané s konkrétní `source_version`, aby při změně zdrojového textu zůstal zachovaný jejich původ.
 
-Ruční import normalizuje pouze absolutní HTTP(S) URL bez přihlašovacích údajů, zahazuje fragment a běžné měřicí parametry a řadí zbývající query parametry. Stejná normalizovaná URL vede ke stejné nabídce. Shodný hash původního titulku a textu je idempotentní; změna originálu vytvoří novou `source_version`. Překlad a shrnutí lze k již existující shodné verzi bezpečně doplnit bez vytvoření další verze. Každý import se audituje pouze pomocí interních identifikátorů a výsledku deduplikace, nikoli obsahem nabídky.
+Ruční import, API i MCP přijímají typ `offer/company_lead/tender`; kvůli zpětné kompatibilitě je při jeho vynechání použit `offer`. Ruční import normalizuje pouze absolutní HTTP(S) URL bez přihlašovacích údajů, zahazuje fragment a běžné měřicí parametry a řadí zbývající query parametry. Stejná normalizovaná URL vede ke stejné příležitosti. Shodný hash původního titulku a textu je idempotentní; změna originálu vytvoří novou `source_version`. Překlad a shrnutí lze k již existující shodné verzi bezpečně doplnit bez vytvoření další verze. Každý import se audituje pouze pomocí interních identifikátorů, typu a výsledku deduplikace, nikoli obsahem nabídky nebo osobními kontaktními údaji. Import nesmí tiše změnit typ existující příležitosti; k tomu slouží samostatný auditovaný převod.
+
+`offer` je konkrétní pracovní nabídka nebo poptávka a jako jediný používá rozhodnutí `Reagovat` a application workflow. `company_lead` je cílený firemní či networkingový kontakt bez potvrzené nabídky; zobrazuje vlastní kontaktní údaje a workflow `new → awaiting_approval → awaiting_response → response_received → closed`. Událost `contacted` vyžaduje výslovné schválení, skutečný čas, kanál, doklad odeslání a budoucí termín kontroly, z něhož atomicky vznikne `follow_up` action item. Odpověď tento konkrétní follow-up dokončí; pozdní doložená odpověď znovu otevře uzavřený lead do `response_received`. Žádná operace zprávu neposílá. `tender` zůstává podporovaný typ bez vlastního stavového automatu.
+
+Převod `offer → company_lead` vyžaduje aktuální `opportunities.lock_version`, zachovává zdrojové verze, odkazy a action items a zapisuje neměnnou historii typu i audit. Nabídka s libovolnou událostí žádosti nebo nenulovým application workflow je konfliktní a převod se odmítne. Provozní převod skutečných soukromých záznamů se provádí ručně po nasazení a nikdy není součástí migrace ani fixtures.
 
 Uložení strukturovaných podmínek a technologií vždy míří na aktuální `source_version` a vyžaduje očekávaný `lock_version`. Zastaralý zápis skončí konfliktem bez částečné změny. Neuvedené sazby, rozsah, jistota i možnost práce z ČR zůstávají `NULL`; sazba může být označena textovým původem a číselnou jistotou pouze v rozsahu 0–1. Technologie jsou v rámci verze unikátní podle normalizovaného názvu a celé uložení se audituje bez textu nabídky a důkazů.
 
@@ -434,7 +444,7 @@ První zapojený endpoint je read-only `GET /api/v1/sources`. Obsluhuje jej tenk
 
 `GET /api/v1/sources/requiring-login` vrací jednotný checklist aktivních zdrojů, jejichž poslední doložený stav vyžaduje přihlášení nebo jiný zásah uživatele. Sdílí datový tvar se seznamem zdrojů a samotné načtení nic nespouští ani přístup neoznačuje za ověřený.
 
-API nabídek odděluje čtecí scope `opportunities:read` od zápisového `opportunities:import`. `GET /api/v1/opportunities` a `GET /api/v1/opportunities/{id}` vracejí globální nabídky spolu se stavem rozhodnutí vlastníka tokenu. `POST /api/v1/opportunities/import` přijímá právě jednu nabídku, odmítá neznámá pole a používá stejnou validaci, normalizaci URL, deduplikaci, verzování a audit jako CLI a web. Běžné nabídky vyžadují HTTP(S) URL; dříve migrované historické záznamy lze bezpečně verzovat pouze přes omezený interní identifikátor `urn:jobradar:historical:<slug>`. Text nabídky zůstává nedůvěryhodným obsahem a import nikdy nemění rozhodnutí ani workflow odeslání.
+API příležitostí odděluje čtecí scope `opportunities:read` od zápisového `opportunities:import`. `GET /api/v1/opportunities` lze filtrovat podle `opportunity_type`; detail i seznam vracejí typ a u leadu jeho samostatný stav. `POST /api/v1/opportunities/import` přijímá právě jednu příležitost, výchozí typ `offer`, odmítá neznámá pole a používá stejnou validaci, normalizaci URL, deduplikaci, verzování a audit jako CLI a web. Běžné záznamy vyžadují HTTP(S) URL; dříve migrované historické záznamy lze bezpečně verzovat pouze přes omezený interní identifikátor `urn:jobradar:historical:<slug>`. Externí text zůstává nedůvěryhodným obsahem a import nikdy nemění rozhodnutí ani workflow odeslání.
 
 `PUT /api/v1/opportunities/{id}/decision` je pouze pohodlná varianta pro delegaci obsahující přesně jednu nabídku. Vyžaduje scope `decisions:write`, ID aktivní delegace, očekávanou verzi stavu a idempotency klíč vázaný na klienta i přesný obsah operace. Změna se historizuje s aktérem `assistant` a odkazem na delegaci; bez delegace nebo při zastaralé verzi se nic nezmění. Ani rozhodnutí `react` nemění workflow na odesláno, nevytváří žádost a v odpovědi výslovně potvrzuje `application_submitted: false`.
 
@@ -456,13 +466,13 @@ Počáteční MCP nástroje budou mapovat doménové operace, nikoli obecný SQL
 
 - `list_sources`, `list_sources_requiring_login`;
 - `request_search`, `resume_search`, `cancel_search`, `get_search_status`;
-- `list_opportunities`, `get_opportunity`, `import_opportunity_version`;
+- `list_opportunities`, `get_opportunity`, `import_opportunity_version`, `convert_opportunity_type`;
 - `save_assessment`, `propose_decision`, `set_decision`, `set_decisions_batch`;
-- `list_reaction_queue`, `record_application_event`.
+- `list_reaction_queue`, `record_application_event`, `record_company_lead_event`.
 
 MCP server používá oficiální PHP SDK, standardní řádkový STDIO transport a vlastní `JOBRADAR_MCP_TOKEN`. Přes úzce vymezeného HTTP klienta volá pouze cesty `/api/v1`; nebootuje databázovou vrstvu a nevystavuje obecný HTTP ani SQL nástroj. Implementované nástroje pokrývají zdroje, řízení kontrol, nabídky, frontu k reakci, import verze, posouzení, vytvoření výslovné delegace a atomické jednotlivé i dávkové rozhodnutí. Schémata mutací vyžadují stejné idempotency klíče, ID delegace a očekávané verze jako API; popisy a anotace nástrojů výslovně uvádějí vedlejší účinky a zákaz odeslání žádosti. Odmítnutí doménové operace v API vrací MCP jako bezpečný chybový výsledek nástroje s kódem a HTTP stavem; interní odpověď API ani token se do něj nepřenášejí. Scope `decisions:delegate` je oddělený a běžnému MCP tokenu se nevydává, pokud uživatel nechce delegace vytvářet výslovným pokynem přes tento klient.
 
-Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:write`, `opportunities:read`, `opportunities:import`, `assessments:write`, `decisions:recommend`, `decisions:delegate`, `decisions:write`, `applications:write` a `audit:read`. Runner nepotřebuje `decisions:write`; běžný rozhodovací klient nepotřebuje `decisions:delegate` a doporučovací klient nepotřebuje `applications:write`.
+Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:write`, `opportunities:read`, `opportunities:import`, `assessments:write`, `decisions:recommend`, `decisions:delegate`, `decisions:write`, `applications:write`, `company_leads:write` a `audit:read`. Runner nepotřebuje `decisions:write`; běžný rozhodovací klient nepotřebuje `decisions:delegate` a doporučovací klient nepotřebuje zápis application ani lead workflow.
 
 ## 14. Přihlášení a bezpečnost
 

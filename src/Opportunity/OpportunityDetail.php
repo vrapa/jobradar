@@ -18,6 +18,7 @@ final readonly class OpportunityDetail
      */
     public function __construct(
         public int $id,
+        public string $opportunityType,
         public string $title,
         public string $originalTitle,
         public ?string $translatedTitle,
@@ -37,6 +38,10 @@ final readonly class OpportunityDetail
         public ?OpportunityTermsView $terms,
         public array $technologies,
         public DecisionStateView $decisionState,
+        /** @var array<string, ?string>|null */
+        public ?array $companyLead,
+        public string $companyLeadStatus,
+        public int $companyLeadLockVersion,
         public array $projectCareHistory = [],
         public array $discoveries = [],
         public array $counterpartyHistory = [],

@@ -16,36 +16,39 @@ final class OpportunityQueryService
     }
 
     /** @return list<OpportunitySummary> */
-    public function listCurrent(?int $userId = null): array
+    public function listCurrent(?int $userId = null, ?string $opportunityType = null): array
     {
-        return $this->listByDecisionVisibility($userId, false);
+        if ($opportunityType !== null) {
+            OpportunityType::validate($opportunityType);
+        }
+        return $this->listByDecisionVisibility($userId, false, false, $opportunityType);
     }
 
     /** @return list<OpportunitySummary> */
     public function listUninteresting(int $userId): array
     {
-        return $this->listByDecisionVisibility($userId, true);
+        return $this->listByDecisionVisibility($userId, true, false, OpportunityType::OFFER);
     }
 
     /** @return list<OpportunitySummary> */
     public function listReactionQueue(int $userId): array
     {
-        return array_values(array_filter($this->listByDecisionVisibility($userId, false, true),
+        return array_values(array_filter($this->listByDecisionVisibility($userId, false, true, OpportunityType::OFFER),
             static fn (OpportunitySummary $item): bool => in_array($item->workflowStatus, ['none', 'preparing', 'awaiting_approval'], true)));
     }
 
     /** @return list<OpportunitySummary> */
     public function listAwaitingResponse(int $userId): array
     {
-        return array_values(array_filter([...$this->listCurrent($userId), ...$this->listUninteresting($userId)],
+        return array_values(array_filter([...$this->listCurrent($userId, OpportunityType::OFFER), ...$this->listUninteresting($userId)],
             static fn (OpportunitySummary $item): bool => in_array($item->workflowStatus, ['submitted', 'awaiting_response'], true)));
     }
 
     /** @return list<OpportunitySummary> */
-    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting, bool $onlyReactionQueue = false): array
+    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting, bool $onlyReactionQueue = false, ?string $opportunityType = null): array
     {
         $rows = $this->database->fetchAll(
-            'SELECT o.id, o.validity_status, o.found_at, c.name AS company_name,
+            'SELECT o.id, o.opportunity_type, o.validity_status, o.found_at, c.name AS company_name,
                     (SELECT pc.value FROM opportunity_project_care pc WHERE pc.opportunity_id = o.id ORDER BY pc.id DESC LIMIT 1) AS project_care,
                     (SELECT cp.value FROM opportunity_counterparty cp WHERE cp.opportunity_id=o.id ORDER BY cp.id DESC LIMIT 1) AS counterparty,
                     (SELECT pk.values_json FROM opportunity_project_kinds pk WHERE pk.opportunity_id=o.id ORDER BY pk.id DESC LIMIT 1) AS project_kinds,
@@ -53,30 +56,40 @@ final class OpportunityQueryService
                     terms.rate_min, terms.rate_max, terms.currency, terms.rate_unit,
                     terms.workload_min, terms.workload_max, terms.workload_unit,
                     assessment.score_min, assessment.score_max, assessment.coverage, assessment.recommendation,
-                    COALESCE(state.decision, ?) AS decision, COALESCE(state.workflow_status, ?) AS workflow_status
+                    COALESCE(state.decision, ?) AS decision, COALESCE(state.workflow_status, ?) AS workflow_status,
+                    COALESCE(lead_state.workflow_status, ?) AS company_lead_status
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
              LEFT JOIN opportunity_terms terms ON terms.source_version_id = v.id
              LEFT JOIN assessments assessment ON assessment.opportunity_id = o.id AND assessment.superseded_at IS NULL
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
+             LEFT JOIN company_lead_states lead_state ON lead_state.opportunity_id = o.id AND lead_state.user_id = ?
              WHERE o.archived_at IS NULL
+               AND (? IS NULL OR o.opportunity_type = ?)
                AND (
-                    (? = 1 AND state.decision = ?)
-                    OR (? = 0 AND ? = 1 AND state.decision = ?)
-                    OR (? = 0 AND ? = 0 AND COALESCE(state.decision, ?) <> ?)
+                    (? = 1 AND o.opportunity_type = ? AND state.decision = ?)
+                    OR (? = 0 AND ? = 1 AND o.opportunity_type = ? AND state.decision = ?)
+                    OR (? = 0 AND ? = 0 AND (o.opportunity_type <> ? OR COALESCE(state.decision, ?) <> ?))
                )
              ORDER BY o.found_at DESC, o.id DESC',
             OpportunityDecision::Undecided->value,
             'none',
+            'new',
             $userId,
+            $userId,
+            $opportunityType,
+            $opportunityType,
             $onlyUninteresting,
+            OpportunityType::OFFER,
             OpportunityDecision::Uninteresting->value,
             $onlyUninteresting,
             $onlyReactionQueue,
+            OpportunityType::OFFER,
             OpportunityDecision::React->value,
             $onlyUninteresting,
             $onlyReactionQueue,
+            OpportunityType::OFFER,
             OpportunityDecision::Undecided->value,
             OpportunityDecision::Uninteresting->value,
         );
@@ -84,14 +97,18 @@ final class OpportunityQueryService
         return array_map(
             static fn (Row $row): OpportunitySummary => new OpportunitySummary(
                 id: (int) $row['id'],
+                opportunityType: (string) $row['opportunity_type'],
                 title: (string) ($row['translated_title'] ?: $row['original_title']),
                 companyName: self::nullableString($row['company_name']),
                 summary: self::nullableString($row['summary']),
                 validityStatus: (string) $row['validity_status'],
                 incomplete: (bool) $row['incomplete'],
                 foundAt: self::dateTime($row['found_at']),
-                decision: OpportunityDecision::from((string) $row['decision']),
-                workflowStatus: (string) $row['workflow_status'],
+                decision: (string) $row['opportunity_type'] === OpportunityType::OFFER
+                    ? OpportunityDecision::from((string) $row['decision'])
+                    : OpportunityDecision::Undecided,
+                workflowStatus: (string) $row['opportunity_type'] === OpportunityType::OFFER ? (string) $row['workflow_status'] : 'none',
+                companyLeadStatus: (string) $row['company_lead_status'],
                 rateMin: self::nullableDecimal($row['rate_min']),
                 rateMax: self::nullableDecimal($row['rate_max']),
                 currency: self::nullableString($row['currency']),
@@ -114,19 +131,25 @@ final class OpportunityQueryService
     public function getDetail(int $id, ?int $userId = null): ?OpportunityDetail
     {
         $row = $this->database->fetch(
-            'SELECT o.id, o.canonical_url, o.validity_status, o.found_at, o.current_source_version_id, o.lock_version, c.name AS company_name,
+            'SELECT o.id, o.opportunity_type, o.canonical_url, o.validity_status, o.found_at, o.current_source_version_id, o.lock_version, c.name AS company_name,
                     v.original_title, v.translated_title, v.original_text, v.translated_text,
                     v.summary, v.source_language, v.incomplete, v.acquired_at,
                     COALESCE(state.decision, ?) AS user_decision, state.decision_reason, state.decision_note,
                     COALESCE(state.workflow_status, ?) AS workflow_status, COALESCE(state.lock_version, 0) AS state_lock_version,
+                    lead_details.contact_name, lead_details.contact_role, lead_details.channel AS lead_channel, lead_details.profile_url, lead_details.outreach_context,
+                    COALESCE(lead_state.workflow_status, ?) AS company_lead_status, COALESCE(lead_state.lock_version, 0) AS company_lead_lock_version,
                     (SELECT COUNT(*) FROM source_versions versions WHERE versions.opportunity_id = o.id) AS version_count
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
+             LEFT JOIN company_lead_details lead_details ON lead_details.opportunity_id = o.id
+             LEFT JOIN company_lead_states lead_state ON lead_state.opportunity_id = o.id AND lead_state.user_id = ?
              WHERE o.id = ? AND o.archived_at IS NULL',
             OpportunityDecision::Undecided->value,
             'none',
+            'new',
+            $userId,
             $userId,
             $id,
         );
@@ -142,6 +165,7 @@ final class OpportunityQueryService
 
         return new OpportunityDetail(
             id: (int) $row['id'],
+            opportunityType: (string) $row['opportunity_type'],
             title: $translatedTitle ?? $originalTitle,
             originalTitle: $originalTitle,
             translatedTitle: $translatedTitle,
@@ -165,12 +189,23 @@ final class OpportunityQueryService
             projectKindHistory: $this->projectKinds->history($id),
             discoveries: array_map(static function ($d): array { $v = (array) $d; $v['discovered_at'] = $v['discovered_at']->format(DATE_ATOM); return $v; }, $this->database->fetchAll('SELECT d.search_definition_id,d.discovered_at,s.name AS source_name,sd.query_text FROM opportunity_discoveries d JOIN source_search_definitions sd ON sd.id = d.search_definition_id JOIN sources s ON s.id = sd.source_id WHERE d.opportunity_id = ? ORDER BY d.id', $id)),
             decisionState: new DecisionStateView(
-                decision: OpportunityDecision::from((string) $row['user_decision']),
-                reason: self::nullableString($row['decision_reason']),
-                note: self::nullableString($row['decision_note']),
-                workflowStatus: (string) $row['workflow_status'],
-                lockVersion: (int) $row['state_lock_version'],
+                decision: (string) $row['opportunity_type'] === OpportunityType::OFFER
+                    ? OpportunityDecision::from((string) $row['user_decision'])
+                    : OpportunityDecision::Undecided,
+                reason: (string) $row['opportunity_type'] === OpportunityType::OFFER ? self::nullableString($row['decision_reason']) : null,
+                note: (string) $row['opportunity_type'] === OpportunityType::OFFER ? self::nullableString($row['decision_note']) : null,
+                workflowStatus: (string) $row['opportunity_type'] === OpportunityType::OFFER ? (string) $row['workflow_status'] : 'none',
+                lockVersion: (string) $row['opportunity_type'] === OpportunityType::OFFER ? (int) $row['state_lock_version'] : 0,
             ),
+            companyLead: (string) $row['opportunity_type'] === OpportunityType::COMPANY_LEAD ? [
+                'contact_name' => self::nullableString($row['contact_name']),
+                'contact_role' => self::nullableString($row['contact_role']),
+                'channel' => self::nullableString($row['lead_channel']),
+                'profile_url' => self::nullableString($row['profile_url']),
+                'context' => self::nullableString($row['outreach_context']),
+            ] : null,
+            companyLeadStatus: (string) $row['company_lead_status'],
+            companyLeadLockVersion: (int) $row['company_lead_lock_version'],
         );
     }
 

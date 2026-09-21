@@ -15,7 +15,7 @@ final class ActionIntegrationProfile
     public static function scopes(bool $applications): array
     {
         return $applications
-            ? ['applications:write', 'opportunities:read', 'opportunities:import', 'action_items:read']
+            ? ['applications:write', 'company_leads:write', 'opportunities:read', 'opportunities:import', 'action_items:read']
             : ['action_items:read', 'action_items:write'];
     }
 }

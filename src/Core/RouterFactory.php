@@ -64,6 +64,10 @@ final class RouterFactory
             ...$opportunityApi,
             'apiAction' => 'assessment',
         ]);
+        $router->addRoute('api/v1/opportunities/<id \d+>/type', [
+            ...$opportunityApi,
+            'apiAction' => 'type',
+        ]);
         $router->addRoute('api/v1/opportunities/<id \d+>', [...$opportunityApi, 'apiAction' => 'detail']);
         $router->addRoute('api/v1/decision-delegations/<id \d+>/decisions', [
             'presenter' => 'Api:Api',

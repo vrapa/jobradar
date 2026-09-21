@@ -44,13 +44,13 @@ final class OpportunityImportService
 
             $companyId = $this->resolveCompanyId($import->companyName, $now);
             $opportunity = $this->database->fetch(
-                'SELECT id, lock_version FROM opportunities WHERE canonical_url_hash = ?',
+                'SELECT id, lock_version, opportunity_type FROM opportunities WHERE canonical_url_hash = ?',
                 $urlHash,
             );
             $opportunityCreated = !$opportunity instanceof Row;
             if ($opportunityCreated) {
                 $this->database->query('INSERT INTO opportunities', [
-                    'opportunity_type' => 'offer',
+                    'opportunity_type' => $import->opportunityType,
                     'company_id' => $companyId,
                     'canonical_url' => $normalizedUrl,
                     'canonical_url_hash' => $urlHash,
@@ -63,6 +63,9 @@ final class OpportunityImportService
                 $opportunityId = (int) $this->database->getInsertId();
             } else {
                 $opportunityId = (int) $opportunity['id'];
+                if ((string) $opportunity['opportunity_type'] !== $import->opportunityType) {
+                    throw new \InvalidArgumentException('Existující příležitost má jiný typ. Použijte auditovaný převod typu.');
+                }
                 if ($companyId !== null) {
                     $this->database->query(
                         'UPDATE opportunities SET company_id = COALESCE(company_id, ?), updated_at = ? WHERE id = ?',
@@ -71,6 +74,10 @@ final class OpportunityImportService
                         $opportunityId,
                     );
                 }
+            }
+
+            if ($import->opportunityType === OpportunityType::COMPANY_LEAD && ($opportunityCreated || $import->companyLead !== null)) {
+                $this->saveCompanyLeadDetails($opportunityId, $import->companyLead, $now);
             }
 
             $this->linkSource($opportunityId, (int) $source['id'], $normalizedUrl, $urlHash, $now);
@@ -132,10 +139,32 @@ final class OpportunityImportService
                 'source_version_id' => $versionId,
                 'opportunity_created' => $opportunityCreated,
                 'version_created' => $versionCreated,
+                'opportunity_type' => $import->opportunityType,
             ]);
 
             return $result;
         });
+    }
+
+    private function saveCompanyLeadDetails(int $opportunityId, ?CompanyLeadInput $lead, \DateTimeImmutable $now): void
+    {
+        $values = [
+            'contact_name' => $this->nullable($lead?->contactName),
+            'contact_role' => $this->nullable($lead?->contactRole),
+            'channel' => $this->nullable($lead?->channel),
+            'profile_url' => $this->nullable($lead?->profileUrl),
+            'outreach_context' => $this->nullable($lead?->context),
+            'updated_at' => $now,
+        ];
+        if ($this->database->fetchField('SELECT opportunity_id FROM company_lead_details WHERE opportunity_id = ?', $opportunityId) !== null) {
+            $this->database->query('UPDATE company_lead_details SET', $values, 'WHERE opportunity_id = ?', $opportunityId);
+            return;
+        }
+        $this->database->query('INSERT INTO company_lead_details', [
+            'opportunity_id' => $opportunityId,
+            ...$values,
+            'created_at' => $now,
+        ]);
     }
 
     private function completeExistingVersion(int $versionId, OpportunityImport $import, string $translationMethod): void

@@ -96,10 +96,10 @@ final class OpportunityDecisionService
             // Lock the owner before offer state to serialize shared preparation plans.
             $this->database->fetch("SELECT id FROM users WHERE id = ? FOR UPDATE", $userId);
             if (!$this->database->fetchField(
-                'SELECT id FROM opportunities WHERE id = ? AND archived_at IS NULL FOR SHARE',
+                "SELECT id FROM opportunities WHERE id = ? AND opportunity_type = 'offer' AND archived_at IS NULL FOR SHARE",
                 $opportunityId,
             )) {
-                throw new \InvalidArgumentException('Nabídka nebyla nalezena.');
+                throw new \InvalidArgumentException('Pracovní nabídka nebyla nalezena. Firemní lead nepoužívá rozhodnutí Reagovat.');
             }
             $state = $this->database->fetch(
                 'SELECT decision, decision_reason, decision_note, lock_version

@@ -36,6 +36,8 @@ Balíček se bude importovat pouze lokálně z ignorovaného souboru s náhledem
 6. Nákup, obnova, zrušení předplatného nebo spotřeba kreditu vždy vyžadují samostatný výslovný souhlas.
 7. Aktivní nabídka se neslučuje s pouhým firemním leadem. Přímé oslovení leadu je samostatný schvalovaný workflow.
 8. Při migraci staré evidence je konkrétní potvrzení systému důkazem odeslání; samotný stav či text konceptu nestačí.
+9. Pouhé přijetí LinkedIn spojení se do JobRadaru zapisovat nemusí. `company_lead` vzniká při cíleném pracovním nebo obchodním oslovení, věcném dotazu či odpovědi vyžadující další krok.
+10. Pokud z leadu později vznikne konkrétní pracovní nabídka, vznikne samostatný záznam typu `offer`. Obě příležitosti lze propojit, ale jejich historie se neslučuje.
 
 ## Kontrolní body implementace
 

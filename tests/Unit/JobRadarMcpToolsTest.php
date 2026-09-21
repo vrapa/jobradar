@@ -124,6 +124,36 @@ final class JobRadarMcpToolsTest extends TestCase
         self::assertStringNotContainsString('jr_hidden_token', $serialized);
     }
 
+    public function testCompanyLeadToolsUseSeparateVersionedEndpoints(): void
+    {
+        $http = new McpRecordingHttpClient([
+            new RunnerHttpResponse(200, ['data' => [], 'meta' => ['count' => 0]]),
+            new RunnerHttpResponse(200, ['data' => ['workflow_status' => 'awaiting_approval']]),
+            new RunnerHttpResponse(200, ['data' => ['opportunity_type' => 'company_lead']]),
+        ]);
+        $tools = new JobRadarMcpTools(new JobRadarMcpApiClient('https://jobradar.example.test/api/v1', 'synthetic-token', $http));
+
+        $tools->listOpportunities('company_lead');
+        $tools->recordCompanyLeadEvent(42, [
+            'event' => 'prepared',
+            'expected_lock_version' => 0,
+            'idempotency_key' => 'synthetic-lead-event',
+            'reference' => 'private/synthetic-draft.md',
+            'occurred_at' => '2030-01-01T10:00:00+00:00',
+        ]);
+        $tools->convertOpportunityType(43, ['opportunity_type' => 'company_lead', 'expected_lock_version' => 1]);
+
+        self::assertSame([
+            'GET /api/v1/opportunities',
+            'POST /api/v1/company-leads/events',
+            'PUT /api/v1/opportunities/43/type',
+        ], $http->requests);
+        self::assertIsArray($http->bodies[1]);
+        self::assertIsArray($http->bodies[2]);
+        self::assertSame(42, $http->bodies[1]['opportunity_id'] ?? null);
+        self::assertSame('company_lead', $http->bodies[2]['opportunity_type'] ?? null);
+    }
+
     public function testTodoistStatusReconciliationUsesVersionedApi(): void
     {
         $http = new McpRecordingHttpClient([

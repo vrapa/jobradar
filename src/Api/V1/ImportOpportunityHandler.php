@@ -35,6 +35,7 @@ final class ImportOpportunityHandler extends BaseHandler
             'additionalProperties' => false,
             'properties' => [
                 'url' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 2048],
+                'opportunityType' => ['type' => 'string', 'enum' => ['offer', 'company_lead', 'tender'], 'default' => 'offer'],
                 'originalTitle' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 500],
                 'originalText' => ['type' => 'string', 'minLength' => 1],
                 'companyName' => ['type' => ['string', 'null'], 'maxLength' => 255],
@@ -48,6 +49,7 @@ final class ImportOpportunityHandler extends BaseHandler
                 'counterparty' => \App\Opportunity\CounterpartyInput::schema(),
                 'projectKinds' => \App\Opportunity\ProjectKindInput::schema(),
                 'discoveryDefinitionId' => ['type' => ['integer','null'], 'minimum' => 1],
+                'companyLead' => \App\Opportunity\CompanyLeadInput::schema(),
             ],
         ], JSON_THROW_ON_ERROR)))->setRequired()];
     }

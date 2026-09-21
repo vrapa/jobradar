@@ -1,14 +1,14 @@
-{block title}Přidat nabídku{/block}
+{block title}Přidat příležitost{/block}
 
 {block content}
 <nav aria-label="Drobečková navigace" class="mb-3">
-    <a n:href="Home:" class="text-decoration-none">Nabídky</a>
+    <a n:href="Home:" class="text-decoration-none">Příležitosti</a>
     <span class="text-body-secondary mx-2" aria-hidden="true">/</span>
     <span aria-current="page">Přidat</span>
 </nav>
 
 <header class="mb-4">
-    <h1 class="display-6 fw-bold">Přidat nabídku</h1>
+    <h1 class="display-6 fw-bold">Přidat příležitost</h1>
     <p class="lead text-body-secondary">Vložte původní obsah; neznámé údaje nechte prázdné.</p>
 </header>
 
@@ -22,8 +22,9 @@
             </div>
 
             <div class="row g-3">
+                <div class="col-12 col-md-6"><label n:name="opportunityType" class="form-label">Typ příležitosti</label><select n:name="opportunityType" class="form-select"></select></div>
                 <div class="col-12">
-                    <label n:name="url" class="form-label">URL nabídky</label>
+                    <label n:name="url" class="form-label">URL příležitosti, profilu nebo konverzace</label>
                     <input n:name="url" class="form-control">
                 </div>
                 <div class="col-12 col-md-8">
@@ -44,8 +45,20 @@
                 </div>
             </div>
 
+            <fieldset class="border rounded p-3 my-4">
+                <legend class="float-none w-auto h5 px-2">Firemní kontakt / lead <span class="text-body-secondary fw-normal">(volitelné údaje)</span></legend>
+                <p class="small text-body-secondary">Vyplňujte pouze pro typ Firemní kontakt / lead. Neznámé údaje ponechte prázdné.</p>
+                <div class="row g-3">
+                    <div class="col-md-6"><label n:name="contactName" class="form-label">Jméno kontaktní osoby</label><input n:name="contactName" class="form-control"></div>
+                    <div class="col-md-6"><label n:name="contactRole" class="form-label">Role kontaktní osoby</label><input n:name="contactRole" class="form-control"></div>
+                    <div class="col-md-6"><label n:name="contactChannel" class="form-label">Kanál</label><input n:name="contactChannel" class="form-control"></div>
+                    <div class="col-md-6"><label n:name="contactProfileUrl" class="form-label">Odkaz na profil nebo konverzaci</label><input n:name="contactProfileUrl" class="form-control"></div>
+                    <div class="col-12"><label n:name="outreachContext" class="form-label">Stručný kontext oslovení</label><textarea n:name="outreachContext" class="form-control"></textarea></div>
+                </div>
+            </fieldset>
+
             <hr class="my-4">
-            <p>Použijte URL a text původního detailu, nikoli úryvek nebo AI shrnutí z vyhledávače.</p>
+            <p>U nabídky použijte URL a text původního detailu, nikoli úryvek nebo AI shrnutí z vyhledávače.</p>
             <fieldset class="mb-3"><legend class="h5">Typ projektu</legend>
                 <p class="small">Vyberte pouze typy doložené textem nabídky. Prázdný výběr při importu zachová případnou starší klasifikaci.</p>
                 <div>{input projectKindValues}</div>
@@ -84,7 +97,7 @@
                     </div>
                 </div>
                 <div class="col-12 d-flex gap-2">
-                    <button n:name="send" class="btn btn-primary">Uložit nabídku</button>
+                    <button n:name="send" class="btn btn-primary">Uložit příležitost</button>
                     <a n:href="Home:" class="btn btn-outline-secondary">Zrušit</a>
                 </div>
             </div>
