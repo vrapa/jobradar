@@ -175,16 +175,138 @@ final class ExecutionService
         $assessmentSchema['properties']['opportunityId'] = ['type' => 'integer', 'minimum' => 1];
         $opportunitySchema = \App\Mcp\JobRadarMcpServerFactory::opportunitySchema();
         $opportunitySchema['properties']['searchStep'] = ['type' => 'string', 'description' => 'Required for multi-step plans: key of the running step.'];
+        $checkpointSchema = self::checkpointSchema();
         return ['run_id' => (int) $run['id'], 'request_id' => (int) $run['search_request_id'],
             'prepare_access' => (bool) $run['prepare_access'] && $run['access_confirmed_at'] === null,
             'browser_session_name' => '💼 Práce',
             'access_preparations' => array_map(static fn ($r): array => (array) $r, $this->database->fetchAll('SELECT source_id,access_status FROM search_access_preparations WHERE search_request_id = ?', $run['search_request_id'])),
-            'schemas' => ['opportunity' => $opportunitySchema, 'assessment' => $assessmentSchema],
+            'schemas' => [
+                'prepare_access' => self::prepareAccessSchema(),
+                'start' => self::startSchema(),
+                'checkpoint' => $checkpointSchema,
+                'pause' => [...$checkpointSchema, 'description' => 'The complete current checkpoint. A successful pause saves it atomically and releases the lease.'],
+                'opportunity' => $opportunitySchema,
+                'assessment' => $assessmentSchema,
+                'finish' => self::finishSchema(),
+            ],
+            'operation_payload_schemas' => [
+                'prepare_access' => 'prepare_access', 'start' => 'start', 'checkpoint' => 'checkpoint',
+                'pause' => 'pause', 'import' => 'opportunity', 'assessment' => 'assessment', 'finish' => 'finish',
+            ],
             'imported_opportunities' => array_map(static fn (Row $row): array => (array) $row, $this->database->fetchAll('SELECT ro.search_run_source_id, rs.source_id, o.id, o.lock_version, o.canonical_url FROM search_run_opportunities ro JOIN search_run_sources rs ON rs.id = ro.search_run_source_id JOIN opportunities o ON o.id = ro.opportunity_id WHERE ro.search_run_id = ?', $run['id'])),
-            'sources' => array_map(fn (Row $row): array => [...(array) $row, 'search_plan' => $this->steps->state((int) $row['run_source_id'])], $sources),
+            'sources' => array_map(function (Row $row): array {
+                $source = (array) $row;
+                $plan = $this->steps->state((int) $row['run_source_id']);
+                return [...$source, 'search_plan' => $plan, 'execution_contract' => self::sourceExecutionContract((string) $row['source_status'], $plan)];
+            }, $sources),
             'profile' => $run['candidate_profile_id'] === null ? null : (array) $this->database->fetch('SELECT id, version, description, parameters_json FROM candidate_profiles WHERE id = ? AND created_by_user_id = ?', $run['candidate_profile_id'], $identity->ownerUserId),
             'rules' => $run['scoring_rule_set_id'] === null ? null : (array) $this->database->fetch('SELECT id, status, rules_json, description FROM scoring_rule_sets WHERE id = ? AND created_by_user_id = ?', $run['scoring_rule_set_id'], $identity->ownerUserId),
             'instructions' => 'Missing search definition or profile means configuration is required. Never invent scope or a matching profile.',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function prepareAccessSchema(): array
+    {
+        return [
+            'type' => 'object', 'additionalProperties' => false, 'required' => ['status'],
+            'properties' => ['status' => ['type' => 'string', 'enum' => ['available', 'login_required', 'blocked', 'error']]],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function startSchema(): array
+    {
+        return [
+            'type' => 'object', 'additionalProperties' => false, 'required' => ['description'],
+            'properties' => [
+                'description' => ['type' => 'string', 'minLength' => 1],
+                'filters' => ['type' => ['object', 'array']],
+                'horizon_from' => ['type' => 'string', 'format' => 'date-time'],
+                'horizon_to' => ['type' => 'string', 'format' => 'date-time'],
+            ],
+            'description' => 'Pass description, filters and optional horizons directly. Do not wrap them in scope.',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function checkpointSchema(): array
+    {
+        return [
+            'type' => 'object', 'additionalProperties' => false, 'required' => ['completed_unit'],
+            'properties' => [
+                'url' => ['type' => 'string', 'format' => 'uri', 'maxLength' => 2048],
+                'page' => ['type' => 'integer', 'minimum' => 0],
+                'completed_unit' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 2000],
+                'pages_traversed' => ['type' => 'integer', 'minimum' => 0],
+                'detail_opened_count' => ['type' => 'integer', 'minimum' => 0],
+                'step_key' => ['type' => 'string'],
+                'step_status' => ['type' => 'string', 'enum' => ['running', 'complete']],
+                'step_displayed_count' => ['type' => 'integer', 'minimum' => 0],
+                'step_related_count' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Required only for category steps; forbidden for other modes.'],
+                'step_completion_reason' => ['type' => 'string', 'enum' => ['end_of_results', 'step_limit', 'source_limit']],
+            ],
+            'description' => 'For a multi-step source, initialize the current planned step with a running checkpoint before import. Follow source.execution_contract for conditional required fields.',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function finishSchema(): array
+    {
+        $counts = [];
+        foreach (['pages_traversed', 'displayed_count', 'detail_opened_count', 'stored_count', 'updated_count', 'duplicate_count', 'rejected_count'] as $name) {
+            $counts[$name] = ['type' => ['integer', 'null'], 'minimum' => 0];
+        }
+        return [
+            'type' => 'object', 'additionalProperties' => false, 'required' => ['status'],
+            'properties' => [
+                'status' => ['type' => 'string', 'enum' => ['complete', 'partial', 'waiting_for_login', 'error', 'cancelled']],
+                ...$counts,
+                'incomplete_reason' => ['type' => ['string', 'null']],
+                'error_code' => ['type' => ['string', 'null']],
+            ],
+            'description' => 'Complete requires every count and terminal search steps. Partial, waiting_for_login and error require incomplete_reason; error also requires error_code.',
+        ];
+    }
+
+    /**
+     * @param array{steps:list<array<string,mixed>>} $plan
+     * @return array<string, mixed>
+     */
+    private static function sourceExecutionContract(string $sourceStatus, array $plan): array
+    {
+        if (in_array($sourceStatus, ['complete', 'partial', 'waiting_for_login', 'error', 'cancelled'], true)) {
+            return ['next_allowed_operations' => [], 'current_step' => null, 'import_allowed' => false];
+        }
+        if ($sourceStatus !== 'running') {
+            return ['next_allowed_operations' => ['start'], 'current_step' => null, 'import_allowed' => false];
+        }
+        if ($plan['steps'] === []) {
+            return ['next_allowed_operations' => ['checkpoint', 'import', 'pause', 'finish'], 'current_step' => null, 'import_allowed' => true];
+        }
+        $current = null;
+        foreach ($plan['steps'] as $step) {
+            if (!in_array($step['status'], ['complete', 'skipped_limit'], true)) {
+                $current = $step;
+                break;
+            }
+        }
+        if ($current === null) {
+            return ['next_allowed_operations' => ['finish'], 'current_step' => null, 'import_allowed' => false];
+        }
+        $required = ['completed_unit', 'step_key', 'step_status', 'step_displayed_count'];
+        if ($current['mode'] === 'category') {
+            $required[] = 'step_related_count';
+        }
+        $initialized = $current['status'] === 'running';
+        return [
+            'next_allowed_operations' => $initialized ? ['checkpoint', 'import', 'pause', 'finish'] : ['checkpoint', 'pause', 'finish'],
+            'routine_next_operation' => 'checkpoint',
+            'current_step' => ['key' => $current['key'], 'mode' => $current['mode'], 'status' => $current['status']],
+            'requires_initial_checkpoint_before_import' => !$initialized,
+            'required_checkpoint_fields' => $required,
+            'import_allowed' => $initialized,
+            'import_search_step' => $initialized ? $current['key'] : null,
         ];
     }
 

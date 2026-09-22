@@ -1,6 +1,8 @@
+import io
 import json
 import unittest
-from server import Executor, dispatch
+import urllib.error
+from server import Executor, dispatch, execution_api_error
 
 
 class ExecutorTests(unittest.TestCase):
@@ -76,6 +78,7 @@ class ExecutorTests(unittest.TestCase):
     def test_access_preparation_stops_renewal_and_keeps_receipt(self):
         schema = dispatch(self.executor, {'method': 'tools/list'})['tools'][0]['inputSchema']
         self.assertIn('prepare_access', schema['properties']['operation']['enum'])
+        self.assertIn('category checkpoints require step_related_count', schema['properties']['payload']['description'])
         self.executor.call({'operation': 'claim'})
         self.executor.api = lambda body: {'request_status': 'waiting_for_login'}
         args = {'operation': 'prepare_access', 'source_id': 3, 'idempotency_key': 'prepare-source-three', 'payload': {'status': 'login_required'}}
@@ -150,6 +153,21 @@ class ExecutorTests(unittest.TestCase):
         self.now += 1
         with self.assertRaises(RuntimeError):
             self.executor.call({'operation': 'verify'})
+
+    def test_structured_api_error_preserves_safe_validation_message(self):
+        body = json.dumps({'error': {'code': 'execution_rejected', 'message': 'Category checkpoint requires a related count.'}}).encode()
+        error = urllib.error.HTTPError('http://127.0.0.1/api', 409, 'Conflict', {}, io.BytesIO(body))
+        parsed = json.loads(str(execution_api_error(error)))
+        self.assertEqual(409, parsed['error']['http_status'])
+        self.assertEqual('execution_rejected', parsed['error']['code'])
+        self.assertEqual('Category checkpoint requires a related count.', parsed['error']['message'])
+        self.assertFalse(parsed['error']['retryable'])
+
+    def test_unstructured_api_error_does_not_echo_response(self):
+        error = urllib.error.HTTPError('http://127.0.0.1/api', 500, 'Failure', {}, io.BytesIO(b'<html>secret</html>'))
+        message = str(execution_api_error(error))
+        self.assertEqual('Execution API rejected request (HTTP 500)', message)
+        self.assertNotIn('secret', message)
 
 
 if __name__ == '__main__':

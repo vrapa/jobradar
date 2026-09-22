@@ -54,6 +54,11 @@ final class ExecutionServiceTest extends TestCase
                 $task = $execution->execute($identity, ['operation' => 'task', ...$base]);
                 self::assertNull($task['profile']);
                 self::assertArrayHasKey('schemas', $task);
+                self::assertArrayHasKey('start', $task['schemas']);
+                self::assertArrayHasKey('checkpoint', $task['schemas']);
+                self::assertArrayHasKey('pause', $task['schemas']);
+                self::assertArrayHasKey('finish', $task['schemas']);
+                self::assertSame('opportunity', $task['operation_payload_schemas']['import']);
                 $start = ['operation' => 'start', ...$base, 'idempotency_key' => 'start-' . $unique, 'payload' => ['description' => 'Synthetic page one']];
                 self::assertTrue($execution->execute($identity, $start)['recorded']);
                 self::assertSame($execution->execute($identity, $start), $execution->execute($identity, $start));
@@ -125,8 +130,20 @@ final class ExecutionServiceTest extends TestCase
                 $categoryLease = $execution->execute($identity, ['operation' => 'claim'])['lease'];
                 $categoryBase = ['run_id' => $categoryLease['run_id'], 'lease_token' => $categoryLease['lease_token'], 'source_id' => $ids[1]];
                 $execution->execute($identity, [...$start, ...$categoryBase, 'idempotency_key' => 'category-start-' . $unique]);
+                $categoryTask = $execution->execute($identity, ['operation' => 'task', ...$categoryBase]);
+                $contract = $categoryTask['sources'][0]['execution_contract'];
+                self::assertSame('checkpoint', $contract['routine_next_operation']);
+                self::assertNotContains('import', $contract['next_allowed_operations']);
+                self::assertTrue($contract['requires_initial_checkpoint_before_import']);
+                self::assertFalse($contract['import_allowed']);
+                self::assertSame('alerts', $contract['current_step']['key']);
+                self::assertContains('step_related_count', $contract['required_checkpoint_fields']);
                 $categoryCheckpoint = ['completed_unit' => 'Synthetic alert one', 'step_key' => 'alerts', 'step_status' => 'running', 'step_displayed_count' => 1, 'step_related_count' => 0, 'detail_opened_count' => 0];
                 $execution->execute($identity, ['operation' => 'checkpoint', ...$categoryBase, 'idempotency_key' => 'category-init-' . $unique, 'payload' => $categoryCheckpoint]);
+                $initializedTask = $execution->execute($identity, ['operation' => 'task', ...$categoryBase]);
+                $initializedContract = $initializedTask['sources'][0]['execution_contract'];
+                self::assertTrue($initializedContract['import_allowed']);
+                self::assertSame('alerts', $initializedContract['import_search_step']);
                 for ($i = 0; $i < 2; $i++) {
                     $execution->execute($identity, ['operation' => 'import', ...$categoryBase, 'idempotency_key' => 'category-import-' . $i . $unique, 'payload' => ['url' => 'https://example.test/' . $unique . '/category/' . $i, 'originalTitle' => 'Synthetic linked detail', 'originalText' => 'Synthetic content.', 'searchStep' => 'alerts']]);
                 }

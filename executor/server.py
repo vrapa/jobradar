@@ -13,6 +13,28 @@ import urllib.parse
 import urllib.request
 
 
+def execution_api_error(error):
+    """Return a safe, actionable error without exposing request data or credentials."""
+    try:
+        raw = error.read(65536)
+        response = json.loads(raw.decode("utf-8"))
+        detail = response.get("error") if isinstance(response, dict) else None
+        code = detail.get("code") if isinstance(detail, dict) else None
+        message = detail.get("message") if isinstance(detail, dict) else None
+        if (isinstance(code, str) and 0 < len(code) <= 80
+                and all(character.isalnum() or character in "._-" for character in code)
+                and isinstance(message, str) and 0 < len(message) <= 1000):
+            return RuntimeError(json.dumps({"error": {
+                "http_status": error.code,
+                "code": code,
+                "message": " ".join(message.split()),
+                "retryable": False,
+            }}, ensure_ascii=False))
+    except (UnicodeDecodeError, ValueError, KeyError, AttributeError):
+        pass
+    return RuntimeError("Execution API rejected request (HTTP %s)" % error.code)
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise RuntimeError("API redirect refused")
@@ -53,8 +75,9 @@ class Executor:
             with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
                 return json.load(response)["data"]
         except urllib.error.HTTPError as error:
-            # Do not echo server HTML, request headers, tokens or payloads.
-            raise RuntimeError("Execution API rejected request (HTTP %s)" % error.code) from None
+            # Only expose the API's bounded structured validation error. Never echo
+            # HTML, request headers, tokens or request payloads.
+            raise execution_api_error(error) from None
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
             raise RuntimeError("Execution API unavailable or invalid response") from None
 
@@ -119,7 +142,7 @@ SCHEMA = {"type": "object", "additionalProperties": False, "required": ["operati
     "operation": {"type": "string", "enum": ["status", "claim", "verify", "task", "prepare_access", "start", "checkpoint", "pause", "import", "assessment", "finish"]},
     "source_id": {"type": "integer", "minimum": 1},
     "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 200},
-    "payload": {"type": "object"}}}
+    "payload": {"type": "object", "description": "Operation-specific payload. After task, follow task.schemas and each source.execution_contract. For a multi-step source, start the current step with checkpoint before import; category checkpoints require step_related_count."}}}
 
 
 def dispatch(executor, message):
@@ -127,11 +150,11 @@ def dispatch(executor, message):
     if method == "initialize":
         return {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}},
                 "serverInfo": {"name": "jobradar-executor", "version": "1.0.0"},
-                "instructions": "Read executor/skills/jobradar-check/SKILL.md. Claim only existing explicitly requested work. Use Chrome. Never apply, send personal data, accept terms or change decisions. Stop external work on a lease failure."}
+                "instructions": "Read executor/skills/jobradar-check/SKILL.md. Claim only existing explicitly requested work. After task, obey task.schemas and source.execution_contract; initialize a planned multi-step step with checkpoint before import. Use Chrome. Never apply, send personal data, accept terms or change decisions. Stop external work on a lease failure."}
     if method == "ping":
         return {}
     if method == "tools/list":
-        return {"tools": [{"name": "execute", "description": "Execution-only JobRadar API. status checks connectivity; claim takes at most one queued request; task returns scope, profile and payload schemas. Source mutations require a stable unique idempotency key. Lease is maintained internally.",
+        return {"tools": [{"name": "execute", "description": "Execution-only JobRadar API. status checks connectivity; claim takes at most one queued request; task returns scope, profile, operation payload schemas and a per-source execution contract. Source mutations require a stable unique idempotency key. For multi-step sources, initialize the current step with checkpoint before import; category checkpoints require step_related_count. Lease is maintained internally.",
             "inputSchema": SCHEMA, "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}}]}
     if method == "tools/call":
         params = message.get("params", {})
