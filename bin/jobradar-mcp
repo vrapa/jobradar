@@ -6,8 +6,8 @@ declare(strict_types=1);
 use App\Mcp\JobRadarMcpApiClient;
 use App\Mcp\JobRadarMcpServerFactory;
 use App\Mcp\JobRadarMcpTools;
+use App\Mcp\IdleStdioTransport;
 use App\Runner\CurlRunnerHttpClient;
-use Mcp\Server\Transport\StdioTransport;
 use Symfony\Component\Dotenv\Dotenv;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -23,7 +23,9 @@ $token = getenv('JOBRADAR_MCP_TOKEN') ?: '';
 try {
     $api = new JobRadarMcpApiClient($apiUrl, $token, new CurlRunnerHttpClient());
     $server = (new JobRadarMcpServerFactory())->create(new JobRadarMcpTools($api));
-    exit($server->run(new StdioTransport()));
+    exit($server->run(new IdleStdioTransport(
+        idleTimeoutSeconds: IdleStdioTransport::idleTimeoutFromEnvironment(),
+    )));
 } catch (Throwable $exception) {
     fwrite(STDERR, 'JobRadar MCP nelze spustit: ' . ($exception instanceof InvalidArgumentException ? $exception->getMessage() : 'interní chyba') . PHP_EOL);
     exit(1);

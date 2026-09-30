@@ -5,12 +5,53 @@ Lease renewal runs independently of Chrome; tokens never reach model/tool output
 """
 import json
 import os
+import queue
 import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+
+DEFAULT_MCP_IDLE_TIMEOUT_SECONDS = 1800
+
+
+def mcp_idle_timeout_seconds(environment=os.environ):
+    raw = environment.get("JOBRADAR_MCP_IDLE_TIMEOUT_SECONDS", "")
+    try:
+        seconds = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_MCP_IDLE_TIMEOUT_SECONDS
+    return seconds if 60 <= seconds <= 86400 else DEFAULT_MCP_IDLE_TIMEOUT_SECONDS
+
+
+def input_lines_until_idle(stream, idle_timeout, clock=time.monotonic):
+    """Yield STDIO lines and stop after bounded inactivity even if stdin stays open."""
+    messages = queue.Queue()
+    end_of_input = object()
+
+    def read_input():
+        try:
+            for input_line in stream:
+                messages.put(input_line)
+        finally:
+            messages.put(end_of_input)
+
+    threading.Thread(target=read_input, daemon=True).start()
+    deadline = clock() + idle_timeout
+    while True:
+        remaining = deadline - clock()
+        if remaining <= 0:
+            return
+        try:
+            message = messages.get(timeout=min(0.25, remaining))
+        except queue.Empty:
+            continue
+        if message is end_of_input:
+            return
+        deadline = clock() + idle_timeout
+        yield message
 
 
 def execution_api_error(error):
@@ -33,6 +74,14 @@ def execution_api_error(error):
     except (UnicodeDecodeError, ValueError, KeyError, AttributeError):
         pass
     return RuntimeError("Execution API rejected request (HTTP %s)" % error.code)
+
+
+def execution_transport_error(error):
+    """Distinguish an API deadline from connection and response failures."""
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    if isinstance(reason, TimeoutError):
+        return RuntimeError("Execution API timed out after 30 seconds")
+    return RuntimeError("Execution API unavailable or invalid response")
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -78,8 +127,8 @@ class Executor:
             # Only expose the API's bounded structured validation error. Never echo
             # HTML, request headers, tokens or request payloads.
             raise execution_api_error(error) from None
-        except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
-            raise RuntimeError("Execution API unavailable or invalid response") from None
+        except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as error:
+            raise execution_transport_error(error) from None
 
     def renew(self):
         with self.lock:
@@ -179,7 +228,7 @@ def main():
             executor.renew()
     threading.Thread(target=heartbeat, daemon=True).start()
     try:
-        for line in sys.stdin:
+        for line in input_lines_until_idle(sys.stdin, mcp_idle_timeout_seconds()):
             request = None
             try:
                 request = json.loads(line)

@@ -1,8 +1,9 @@
 import io
 import json
+import threading
 import unittest
 import urllib.error
-from server import Executor, dispatch, execution_api_error
+from server import Executor, dispatch, execution_api_error, execution_transport_error, input_lines_until_idle, mcp_idle_timeout_seconds
 
 
 class ExecutorTests(unittest.TestCase):
@@ -168,6 +169,32 @@ class ExecutorTests(unittest.TestCase):
         message = str(execution_api_error(error))
         self.assertEqual('Execution API rejected request (HTTP 500)', message)
         self.assertNotIn('secret', message)
+
+    def test_wrapped_timeout_is_reported_as_timeout(self):
+        error = urllib.error.URLError(TimeoutError('synthetic detail'))
+        message = str(execution_transport_error(error))
+        self.assertEqual('Execution API timed out after 30 seconds', message)
+        self.assertNotIn('synthetic detail', message)
+
+    def test_mcp_idle_timeout_configuration_is_bounded(self):
+        self.assertEqual(1800, mcp_idle_timeout_seconds({}))
+        self.assertEqual(900, mcp_idle_timeout_seconds({'JOBRADAR_MCP_IDLE_TIMEOUT_SECONDS': '900'}))
+        self.assertEqual(1800, mcp_idle_timeout_seconds({'JOBRADAR_MCP_IDLE_TIMEOUT_SECONDS': '10'}))
+        self.assertEqual(1800, mcp_idle_timeout_seconds({'JOBRADAR_MCP_IDLE_TIMEOUT_SECONDS': 'invalid'}))
+
+    def test_input_reader_ends_when_open_stream_stays_idle(self):
+        class BlockingStream:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                threading.Event().wait(1)
+                raise StopIteration
+
+        self.assertEqual([], list(input_lines_until_idle(BlockingStream(), 0.02)))
+
+    def test_input_reader_preserves_available_lines(self):
+        self.assertEqual(['first\n', 'second\n'], list(input_lines_until_idle(io.StringIO('first\nsecond\n'), 1)))
 
 
 if __name__ == '__main__':

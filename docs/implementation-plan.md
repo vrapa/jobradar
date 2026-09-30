@@ -599,6 +599,7 @@ Výstup: bezpečný strukturovaný přístup bez přímého MySQL.
 - veřejný/RSS/API adaptér a falešný prohlížeč pro testy;
 - lokální přihlašovací preflight a bezpečné hlášení zásahu;
 - MCP nástroje pro nabídky, posouzení, rozhodnutí a stav kontrol;
+- omezená životnost nečinných STDIO relací, aby změna úlohy nebo modelu nehromadila osiřelé Python, Docker a PHP procesy;
 - následně zdrojové adaptéry podle priority A, vždy s dodržením podmínek portálu.
 
 Výstup: ručně spuštěný úplný průchod z aplikace a práce asistenta přes MCP.
