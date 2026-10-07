@@ -422,6 +422,8 @@ JSON import je dostupný z CLI jako `opportunity:import-json <soubor> [--dry-run
 
 ## 12. Soukromý registr zdrojů
 
+Správce serveru může zdroj vratně aktivovat či deaktivovat přes `bin/source-admin.php` (`status` / `set-active`). Doménová operace vyžaduje aktivního administrátora, očekávanou verzi zdroje a důvod; změna má audit `source.activation_saved`. Deaktivace pouze přepíná `sources.active` a zvýší verzi, zachovává zadání, přístupy, nabídky a historii. Neaktivní zdroj není dostupný pro nové kontroly ani v checklistu přihlášení, existující požadavky se nemění. Interní zdroj ručního importu je chráněn. Opětovná aktivace používá stejnou kontrolovanou operaci; archivovaný zdroj se tím neobnovuje. Nástroj patří důvěryhodné serverové administraci, není rozhraním MCP ani vykonavatele.
+
 Vlastník konfiguruje zdroje, priority A/B/C, účty, rozsah oprávněného přístupu, dotazy a limity ve své databázi. Produkt neobsahuje seznam jeho portálů ani potvrzení registrací či předplatného. Obecné adaptéry nesmějí implicitně aktivovat zdroj. Omezený bezplatný výběr lze zkontrolovat, pokud odpovídá připnutému zadání; úplnost se vztahuje výhradně k doloženému rozsahu.
 
 ## 13. API a MCP smlouva

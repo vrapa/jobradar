@@ -2,6 +2,8 @@
 
 Na stránce Zdroje jsou předvolena A. Přidat B/C zachovává předchozí výběr. Jen A, Vše a Nic výběr nahrazují. Administrátor může upravit prioritu; při souběžné změně je nutné stránku obnovit.
 
+Správce serveru může zdroj vratně deaktivovat příkazem `php bin/source-admin.php set-active SOURCE_ID ACTOR_ID EXPECTED_VERSION 0 "Důvod změny"`; hodnotou `1` jej znovu aktivuje. Aktuální verzi a uložený stav načte přes `php bin/source-admin.php status SOURCE_ID`. Příkazy v Dockeru spouštějte jako `www-data`. Změna vyžaduje aktivního administrátora, aktuální verzi a důvod, ukládá audit a zachovává zadání, přístupové stavy, nabídky i historii kontrol. Neaktivní zdroj se nenabízí pro nové kontroly ani v seznamu požadovaného přihlášení; již vytvořené kontroly se nepřepisují. Interní zdroj ručního importu se nevypíná. Tento nástroj je pouze pro důvěryhodnou serverovou administraci; MCP a vykonavatel nadále používají verzované API.
+
 Ruční Google: otevřete uložený dotaz, najděte původní detail a použijte Uložit nalezenou nabídku. Vložte původní URL/text, nikoli snippet nebo AI shrnutí. Dotazy lze upravit pod stejným názvem jako novou verzi nebo deaktivovat. Původní verze zůstávají dohledatelné.
 
 ## API v1

@@ -88,6 +88,64 @@ final class SourcePreferencesTest extends TestCase
         });
     }
 
+    public function testSourceDeactivationPreservesHistoryAndCanBeReversed(): void
+    {
+        $this->withinTransaction(function (): void {
+            $settings = $this->container->getByType(SourceSettingsService::class);
+            $requests = $this->container->getByType(SearchRequestService::class);
+            $settings->savePlan($this->user, $this->source, 1, json_encode([
+                ['key' => 'original', 'name' => 'Synthetic search', 'query' => 'maintenance', 'limit' => 2],
+            ], JSON_THROW_ON_ERROR), 2, 'Synthetic review', 'Synthetic supported controls');
+            $definitions = $settings->definitions($this->source);
+            $request = $requests->request($this->user, [$this->source], 'source-activation-test-' . $this->source);
+            $requestSources = $this->db->fetchAll('SELECT * FROM search_request_sources WHERE search_request_id = ?', $request->requestId);
+            $settings->setActive($this->user, $this->source, 2, false, 'Synthetic source suspended');
+            $state = $settings->activationState($this->source);
+            self::assertFalse((bool) $state['active']);
+            self::assertSame(3, (int) $state['lock_version']);
+            self::assertEquals($definitions, $settings->definitions($this->source));
+            self::assertEquals($requestSources, $this->db->fetchAll('SELECT * FROM search_request_sources WHERE search_request_id = ?', $request->requestId));
+            self::assertNotContains($this->source, array_map(static fn ($s): int => $s->id, $this->container->getByType(SourceQueryService::class)->activeCheckableSources()));
+            $this->rejects(fn () => $requests->request($this->user, [$this->source], 'source-inactive-test-' . $this->source));
+            $this->rejects(fn () => $settings->setActive($this->user, $this->source, 2, true, 'Stale restore'));
+            $settings->setActive($this->user, $this->source, 3, false, 'Already inactive');
+            self::assertSame(3, (int) $settings->activationState($this->source)['lock_version']);
+            $event = $this->db->fetch("SELECT * FROM audit_log WHERE actor_user_id = ? AND event_type = 'source.activation_saved'", $this->user);
+            self::assertNotNull($event);
+            $context = json_decode($event['context_json'], true, flags: JSON_THROW_ON_ERROR);
+            self::assertSame($this->source, $context['source_id']);
+            self::assertTrue($context['old_active']);
+            self::assertFalse($context['new_active']);
+            self::assertSame('Synthetic source suspended', $context['reason']);
+            $settings->setActive($this->user, $this->source, 3, true, 'Synthetic source restored');
+            self::assertTrue((bool) $settings->get($this->source)['active']);
+            self::assertEquals($definitions, $settings->definitions($this->source));
+            self::assertContains($this->source, array_map(static fn ($s): int => $s->id, $this->container->getByType(SourceQueryService::class)->activeCheckableSources()));
+            self::assertSame(2, (int) $this->db->fetchField("SELECT COUNT(*) FROM audit_log WHERE actor_user_id = ? AND event_type = 'source.activation_saved'", $this->user));
+        });
+    }
+
+    public function testSourceActivationRejectsUnauthorizedArchivedAndInternalSources(): void
+    {
+        $this->withinTransaction(function (): void {
+            $settings = $this->container->getByType(SourceSettingsService::class);
+            $this->rejects(fn () => $settings->setActive($this->user + 1000000, $this->source, 1, false, 'Invalid actor'));
+            $this->rejects(fn () => $settings->setActive($this->user, $this->source, 1, false, ' '));
+            $this->db->query("UPDATE users SET role = 'user' WHERE id = ?", $this->user);
+            $this->rejects(fn () => $settings->setActive($this->user, $this->source, 1, false, 'Non-admin actor'));
+            $this->db->query("UPDATE users SET role = 'admin', deactivated_at = ? WHERE id = ?", new \DateTimeImmutable(), $this->user);
+            $this->rejects(fn () => $settings->setActive($this->user, $this->source, 1, false, 'Inactive admin'));
+            $this->db->query('UPDATE users SET deactivated_at = NULL WHERE id = ?', $this->user);
+            $this->db->query('UPDATE sources SET archived_at = ? WHERE id = ?', new \DateTimeImmutable(), $this->source);
+            $this->rejects(fn () => $settings->setActive($this->user, $this->source, 1, true, 'Archived source'));
+            $this->db->query("UPDATE sources SET archived_at = NULL, source_type = 'manual' WHERE id = ?", $this->source);
+            $this->rejects(fn () => $settings->setActive($this->user, $this->source, 1, false, 'Internal source'));
+            self::assertTrue((bool) $settings->activationState($this->source)['active']);
+            self::assertSame(1, (int) $settings->activationState($this->source)['lock_version']);
+            self::assertSame(0, (int) $this->db->fetchField("SELECT COUNT(*) FROM audit_log WHERE actor_user_id = ? AND event_type = 'source.activation_saved'", $this->user));
+        });
+    }
+
     public function testMultiStepExecutionKeepsPinsBudgetsAndResumeState(): void
     {
         $this->withinTransaction(function (): void {

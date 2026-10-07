@@ -11,6 +11,42 @@ final class SourceSettingsService
 {
     public function __construct(private readonly Connection $db, private readonly AuditLogger $audit) {}
 
+    /** Server administration only; inactive sources remain readable for recovery.
+     * @return array<string, mixed>
+     */
+    public function activationState(int $id): array
+    {
+        $row = $this->db->fetch('SELECT id, name, priority, active, archived_at, lock_version FROM sources WHERE id = ?', $id);
+        if ($row === null) { throw new \InvalidArgumentException('Zdroj nebyl nalezen.'); }
+        return (array) $row;
+    }
+
+    public function setActive(int $actor, int $id, int $version, bool $active, string $reason): void
+    {
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 2000) {
+            throw new \InvalidArgumentException('Doplňte důvod změny (nejvýše 2000 znaků).');
+        }
+        $this->db->transaction(function () use ($actor, $id, $version, $active, $reason): void {
+            if (!$this->db->fetchField("SELECT id FROM users WHERE id = ? AND role = 'admin' AND deactivated_at IS NULL", $actor)) {
+                throw new \InvalidArgumentException('Změny zdrojů smí provádět pouze administrátor.');
+            }
+            $source = $this->db->fetch('SELECT * FROM sources WHERE id = ? FOR UPDATE', $id);
+            if ($source === null || $source['archived_at'] !== null || (int) $source['lock_version'] !== $version) {
+                throw new \InvalidArgumentException('Zdroj se změnil nebo není dostupný. Načtěte aktuální stav.');
+            }
+            if ($source['source_type'] === 'manual') {
+                throw new \InvalidArgumentException('Interní zdroj ručního importu nelze deaktivovat.');
+            }
+            if ((bool) $source['active'] === $active) { return; }
+            $this->db->query('UPDATE sources SET active = ?, lock_version = lock_version + 1, updated_at = ? WHERE id = ?', $active, new \DateTimeImmutable(), $id);
+            $this->audit->record('source.activation_saved', $actor, [
+                'source_id' => $id, 'old_active' => (bool) $source['active'], 'new_active' => $active,
+                'expected_lock_version' => $version, 'reason' => $reason,
+            ]);
+        });
+    }
+
     /** @return array<string, mixed> */
     public function get(int $id): array
     {
