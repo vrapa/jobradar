@@ -2,10 +2,10 @@
 import argparse
 import os
 from pathlib import Path
-import subprocess
 import sys
 
-from stdio import decrypt_credential
+from credentials import decrypt_credential
+from startup import StartupFailure, StartupLog, run_stdio_child, wait_for_runtime
 
 
 if __name__ == '__main__':
@@ -13,6 +13,8 @@ if __name__ == '__main__':
     parser.add_argument('--credential-file', type=Path, required=True)
     parser.add_argument('--container', default='JobRadar-web')
     args = parser.parse_args()
+    log = StartupLog('scoped-mcp')
+    log.emit('launcher_started')
     try:
         token = decrypt_credential(args.credential_file)
     except Exception:
@@ -22,12 +24,20 @@ if __name__ == '__main__':
     environment = os.environ.copy()
     environment['JOBRADAR_MCP_TOKEN'] = token
     token = ''
+    log.emit('credential_ready')
     try:
-        sys.exit(subprocess.call([
+        wait_for_runtime(args.container, log)
+        sys.exit(run_stdio_child([
             'docker', 'exec', '-i',
             '-e', 'JOBRADAR_MCP_API_URL=http://localhost/api/v1',
             '-e', 'JOBRADAR_MCP_TOKEN',
             args.container, 'php', 'bin/jobradar-mcp',
-        ], env=environment))
+        ], environment, log))
+    except StartupFailure as error:
+        print('JobRadar: ' + str(error), file=sys.stderr)
+        sys.exit(1)
+    except OSError:
+        print('JobRadar: unable to start the MCP runtime.', file=sys.stderr)
+        sys.exit(1)
     finally:
         environment.pop('JOBRADAR_MCP_TOKEN', None)

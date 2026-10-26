@@ -5,53 +5,12 @@ Lease renewal runs independently of Chrome; tokens never reach model/tool output
 """
 import json
 import os
-import queue
 import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-
-
-DEFAULT_MCP_IDLE_TIMEOUT_SECONDS = 1800
-
-
-def mcp_idle_timeout_seconds(environment=os.environ):
-    raw = environment.get("JOBRADAR_MCP_IDLE_TIMEOUT_SECONDS", "")
-    try:
-        seconds = int(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_MCP_IDLE_TIMEOUT_SECONDS
-    return seconds if 60 <= seconds <= 86400 else DEFAULT_MCP_IDLE_TIMEOUT_SECONDS
-
-
-def input_lines_until_idle(stream, idle_timeout, clock=time.monotonic):
-    """Yield STDIO lines and stop after bounded inactivity even if stdin stays open."""
-    messages = queue.Queue()
-    end_of_input = object()
-
-    def read_input():
-        try:
-            for input_line in stream:
-                messages.put(input_line)
-        finally:
-            messages.put(end_of_input)
-
-    threading.Thread(target=read_input, daemon=True).start()
-    deadline = clock() + idle_timeout
-    while True:
-        remaining = deadline - clock()
-        if remaining <= 0:
-            return
-        try:
-            message = messages.get(timeout=min(0.25, remaining))
-        except queue.Empty:
-            continue
-        if message is end_of_input:
-            return
-        deadline = clock() + idle_timeout
-        yield message
 
 
 def execution_api_error(error):
@@ -221,6 +180,9 @@ def main():
     # Windows pipe defaults can be cp1250; MCP is always UTF-8, including Czech task data.
     sys.stdin.reconfigure(encoding='utf-8')
     sys.stdout.reconfigure(encoding='utf-8')
+    from startup import StartupLog
+    log = StartupLog('executor-transport')
+    log.emit('mcp_ready')
     executor = Executor()
     stop = threading.Event()
     def heartbeat():
@@ -228,7 +190,9 @@ def main():
             executor.renew()
     threading.Thread(target=heartbeat, daemon=True).start()
     try:
-        for line in input_lines_until_idle(sys.stdin, mcp_idle_timeout_seconds()):
+        # An open STDIO pipe is a live connection, even when no requests arrive.
+        # EOF, not elapsed inactivity, owns the transport lifetime.
+        for line in sys.stdin:
             request = None
             try:
                 request = json.loads(line)

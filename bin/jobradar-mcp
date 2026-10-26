@@ -6,11 +6,17 @@ declare(strict_types=1);
 use App\Mcp\JobRadarMcpApiClient;
 use App\Mcp\JobRadarMcpServerFactory;
 use App\Mcp\JobRadarMcpTools;
-use App\Mcp\IdleStdioTransport;
 use App\Runner\CurlRunnerHttpClient;
+use Mcp\Server\Transport\StdioTransport;
 use Symfony\Component\Dotenv\Dotenv;
 
+$startupStarted = hrtime(true);
+$startupLog = static function (string $phase) use ($startupStarted): void {
+    fwrite(STDERR, sprintf("JobRadar startup component=php-mcp phase=%s elapsed_ms=%d\n", $phase, (int) ((hrtime(true) - $startupStarted) / 1_000_000)));
+};
+$startupLog('php_started');
 require dirname(__DIR__) . '/vendor/autoload.php';
+$startupLog('autoload_ready');
 
 $rootDirectory = dirname(__DIR__);
 $environmentFile = $rootDirectory . '/.env';
@@ -23,9 +29,8 @@ $token = getenv('JOBRADAR_MCP_TOKEN') ?: '';
 try {
     $api = new JobRadarMcpApiClient($apiUrl, $token, new CurlRunnerHttpClient());
     $server = (new JobRadarMcpServerFactory())->create(new JobRadarMcpTools($api));
-    exit($server->run(new IdleStdioTransport(
-        idleTimeoutSeconds: IdleStdioTransport::idleTimeoutFromEnvironment(),
-    )));
+    $startupLog('mcp_ready');
+    exit($server->run(new StdioTransport()));
 } catch (Throwable $exception) {
     fwrite(STDERR, 'JobRadar MCP nelze spustit: ' . ($exception instanceof InvalidArgumentException ? $exception->getMessage() : 'interní chyba') . PHP_EOL);
     exit(1);

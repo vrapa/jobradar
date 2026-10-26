@@ -601,7 +601,7 @@ Výstup: bezpečný strukturovaný přístup bez přímého MySQL.
 - veřejný/RSS/API adaptér a falešný prohlížeč pro testy;
 - lokální přihlašovací preflight a bezpečné hlášení zásahu;
 - MCP nástroje pro nabídky, posouzení, rozhodnutí a stav kontrol;
-- omezená životnost nečinných STDIO relací, aby změna úlohy nebo modelu nehromadila osiřelé Python, Docker a PHP procesy;
+- životnost STDIO relací podle skutečného spojení: PHP SDK i Python vykonavatel čekají na další zprávy bez časovače nečinnosti a končí při EOF či ukončení hostitelem; bezpečnostní limity lease a rozpracované práce zůstávají samostatné;
 - následně zdrojové adaptéry podle priority A, vždy s dodržením podmínek portálu.
 
 Výstup: ručně spuštěný úplný průchod z aplikace a práce asistenta přes MCP.
@@ -688,3 +688,7 @@ Před commitem spusťte `python scripts/privacy-check.py --staged`, před publik
 Přechod rozhodnutí na `react` ve stavu `none` nebo `preparing` atomicky zajistí jeden otevřený `prepare_applications` na vlastníka. Ruční i delegované rozhodování používá stejnou službu. Zámek vlastníka před zámkem rozhodnutí serializuje souběžné volby; existující otevřený plán se vrací beze změn. Opakování stejného rozhodnutí ani změna poznámky po dokončení plánu nevytváří kopii. Nový přechod jiné či znovu vybrané nabídky může po uzavření založit nový plán. Již připravené, odeslané a uzavřené žádosti jej nezakládají. Migrace 019 rozšiřuje povolené typy bez zpětného zpracování historických rozhodnutí.
 
 Plán má nulové opportunity_id, žádný automatický termín a action_url na `/nabidky/k-reakci`. Todoist jej přenáší do sekce přípravy reakcí; deduplikuje marker i společný název a odkaz. Výběr nabídek se čte živě z JobRadaru. Dokončení plánu nemění rozhodnutí ani stav žádostí; neuzavírá se automaticky při odeslání jedné nabídky.
+
+### Odolnost připojení MCP
+
+Životnost transportu se řídí EOF, nikoli nečinností. Lokální registrace nastavuje samostatný startovací limit 120 sekund, limit volání 60 sekund a čekání hostitele na katalog nepovinných MCP. Oprava existující registrace je idempotentní a oddělená od vydání či rotace tokenu; zachovává vlastníka, scopes a nesouvisející konfiguraci. Scoped launcher před spuštěním PHP provede pouze omezený read-only preflight Docker/PHP (90 sekund celkem, nejvýše 5 sekund na pokus). Jakmile předá skutečné STDIO, nesmí automaticky opakovat požadavky ani zápisy. Pevné fáze a časování startu jdou do stderr bez tajemství a provozního obsahu; stdout zůstává pouze pro MCP. Přijímací kontroly zahrnují opakované nové připojení, čtení oprávněného API, 35 minut skutečné nečinnosti a korektní EOF. Podrobný postup je v [dokumentaci vykonavatele](executor.md#odolný-start-a-oprava-registrace).

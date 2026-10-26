@@ -66,6 +66,11 @@ jobs:
       - name: Run PHP tests and static analysis
         run: composer check
 
+      - name: Check Python executor and MCP connection lifecycle
+        run: |
+          python3 -m unittest discover -s executor -p 'test_*.py'
+          python3 scripts/check-mcp-lifecycle.py --idle-seconds 65
+
       - name: Lint Latte templates
         run: vendor/bin/latte-lint src/Presentation
 
