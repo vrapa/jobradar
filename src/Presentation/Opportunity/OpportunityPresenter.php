@@ -13,6 +13,7 @@ use App\Decision\DecisionQueryService;
 use App\Opportunity\OpportunityConflictException;
 use App\Opportunity\OpportunityQueryService;
 use App\Presentation\SecuredPresenter;
+use App\Tender\TenderWorkflowService;
 use Nette\Application\UI\Form;
 use Nette\Forms\Controls\SubmitButton;
 
@@ -33,6 +34,8 @@ final class OpportunityPresenter extends SecuredPresenter
         private readonly \App\Application\ApplicationWorkflowService $workflow,
         private readonly CompanyLeadWorkflowService $companyLeadWorkflow,
         private readonly \App\Opportunity\OpportunityTypeService $opportunityTypes,
+        private readonly TenderWorkflowService $tenderWorkflow,
+        private readonly TenderStatusFormFactory $tenderStatusForms,
     ) {
         parent::__construct();
     }
@@ -55,6 +58,7 @@ final class OpportunityPresenter extends SecuredPresenter
             'workflowLabels' => \App\Application\ApplicationWorkflowService::LABELS,
             'companyLeadHistory' => $opportunity->opportunityType === \App\Opportunity\OpportunityType::COMPANY_LEAD ? $this->companyLeadWorkflow->history((int) $this->getUser()->getId(), $id) : [],
             'companyLeadLabels' => CompanyLeadWorkflowService::LABELS,
+            'tenderHistory' => $opportunity->opportunityType === \App\Opportunity\OpportunityType::TENDER ? $this->tenderWorkflow->history((int) $this->getUser()->getId(), $id) : [],
             'openActionItemCount' => count(array_filter($actionItems, static fn (array $item): bool => $item['status'] === 'open')),
         ]);
 
@@ -281,6 +285,37 @@ final class OpportunityPresenter extends SecuredPresenter
             $this->redirect('this');
         };
         return $form;
+    }
+
+    protected function createComponentTenderStatusForm(): Form
+    {
+        $userId = (int) $this->getUser()->getId();
+        $tender = $this->opportunities->getDetail($this->opportunityId, $userId);
+        if ($tender === null || $tender->opportunityType !== \App\Opportunity\OpportunityType::TENDER) {
+            $this->error('Výběrové řízení nebylo nalezeno.');
+        }
+        return $this->tenderStatusForms->create(
+            $tender->tenderStatus,
+            $tender->tenderLockVersion,
+            function (Form $form, array $values) use ($userId): void {
+                try {
+                    $result = $this->tenderWorkflow->record($userId, $this->opportunityId, [
+                        'event' => (string) ($values['event'] ?? ''),
+                        'expected_lock_version' => (int) ($values['lockVersion'] ?? -1),
+                        'idempotency_key' => (string) ($values['idempotencyKey'] ?? ''),
+                    ]);
+                } catch (\InvalidArgumentException|OpportunityConflictException $exception) {
+                    $form->addError($exception->getMessage());
+                    return;
+                }
+                $cancelled = count($result['cancelled_action_item_ids'] ?? []);
+                $message = $result['workflow_status'] === 'closed'
+                    ? 'Výběrové řízení bylo uzavřeno.' . ($cancelled > 0 ? ' Otevřené navazující úkoly byly zrušeny a změna čeká na synchronizaci do Todoistu.' : '')
+                    : 'Výběrové řízení bylo znovu otevřeno.';
+                $this->flashMessage($message, 'success');
+                $this->redirect('this');
+            },
+        );
     }
 
     protected function createComponentCompanyLeadWorkflowForm(): Form

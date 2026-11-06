@@ -12,6 +12,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--credential-file', type=Path, required=True)
     parser.add_argument('--container', default='JobRadar-web')
+    parser.add_argument('--profile', choices=('jobradar-actions', 'jobradar-applications'), default='jobradar-actions')
     args = parser.parse_args()
     log = StartupLog('scoped-mcp')
     log.emit('launcher_started')
@@ -31,6 +32,7 @@ if __name__ == '__main__':
             'docker', 'exec', '-i',
             '-e', 'JOBRADAR_MCP_API_URL=http://localhost/api/v1',
             '-e', 'JOBRADAR_MCP_TOKEN',
+            '-e', 'JOBRADAR_MCP_PROFILE=' + args.profile,
             args.container, 'php', 'bin/jobradar-mcp',
         ], environment, log))
     except StartupFailure as error:

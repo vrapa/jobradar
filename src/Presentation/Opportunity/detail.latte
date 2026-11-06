@@ -47,6 +47,7 @@
         <span class="badge text-bg-primary">{App\Opportunity\OpportunityType::LABELS[$opportunity->opportunityType]}</span>
         <span class="badge text-bg-light border">{$opportunity->validityStatus === 'unknown' ? 'Platnost neověřena' : $opportunity->validityStatus}</span>
         <span n:if="$opportunity->incomplete" class="badge text-bg-warning">Neúplný zdrojový obsah</span>
+        <span n:if="$opportunity->opportunityType === 'tender' && $opportunity->tenderStatus === 'closed'" class="badge text-bg-secondary">Uzavřeno</span>
         <span class="badge text-bg-light border">{$opportunity->versionCount} {if $opportunity->versionCount === 1}verze{else}verzí{/if}</span>
     </div>
     <h1 class="display-6 fw-bold mb-2">{$opportunity->title}</h1>
@@ -56,6 +57,21 @@
         <a n:if="$opportunity->opportunityType === 'offer'" n:href="OpportunityTerms: $opportunity->id" class="btn btn-primary">Upravit podmínky</a>
     </div>
 </header>
+
+<section n:if="$opportunity->opportunityType === 'tender'" class="card shadow-sm mb-4" aria-labelledby="tender-status-title">
+    <div class="card-body">
+        <h2 id="tender-status-title" class="h5">Stav výběrového řízení: {$opportunity->tenderStatus === 'closed' ? 'Uzavřeno' : 'Aktivní'}</h2>
+        <p class="text-body-secondary">Uzavření zachová záznam, zdrojové verze, přílohy, posouzení i historii úkolů. Zruší pouze dosud otevřené navazující úkoly; propojené úkoly se do Todoistu promítnou běžnou synchronizací.</p>
+        {form tenderStatusForm}
+            <div n:if="$form->hasErrors()" class="alert alert-danger"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>
+            <button n:name="save" class="btn {$opportunity->tenderStatus === 'closed' ? 'btn-primary' : 'btn-outline-secondary'}">{$opportunity->tenderStatus === 'closed' ? 'Znovu otevřít' : 'Uzavřít výběrové řízení'}</button>
+        {/form}
+        <details n:if="count($tenderHistory) > 0" class="mt-3">
+            <summary>Historie stavu ({count($tenderHistory)})</summary>
+            <ol class="mt-2"><li n:foreach="$tenderHistory as $event"><strong>{$event['workflow_status'] === 'closed' ? 'Uzavřeno' : 'Aktivní'}</strong> — {$event['created_at']|date:'j. n. Y H:i'}</li></ol>
+        </details>
+    </div>
+</section>
 
 <section n:if="$opportunity->opportunityType === 'company_lead'" class="card shadow-sm mb-4" aria-labelledby="lead-contact-title">
     <div class="card-body">
@@ -156,7 +172,7 @@
                 <span n:if="$item['external_id'] !== null && $item['external_url'] === null" class="small text-body-secondary">Propojeno s Todoistem</span>
             </li>
         </ul>
-        <details class="mb-3" open>
+        <details n:if="$opportunity->opportunityType !== 'tender' || $opportunity->tenderStatus === 'active'" class="mb-3" open>
             <summary class="fw-semibold">Přidat konkrétní krok</summary>
             {form actionItemForm, class: 'mt-3'}
                 <div n:if="$form->hasErrors()" class="alert alert-danger"><ul class="mb-0"><li n:foreach="$form->errors as $error">{$error}</li></ul></div>

@@ -84,6 +84,30 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { description: Stale state version or conflicting idempotency key }
         '422': { description: Missing evidence, invalid timestamp, foreign action or forbidden transition }
+  /tenders/events:
+    post:
+      operationId: recordTenderEvent
+      summary: Close or reopen a tender without changing its type, decisions, or application workflow
+      description: Requires tenders:write. Uses a tender-specific optimistic lock, owner-scoped idempotency and immutable history. Closing atomically cancels only open linked action items; completed and already cancelled actions remain unchanged, and external task links remain available for normal Todoist reconciliation. This operation never sends or submits anything.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [opportunity_id, event, expected_lock_version, idempotency_key]
+              properties:
+                opportunity_id: { type: integer, minimum: 1 }
+                event: { type: string, enum: [closed, reopened] }
+                expected_lock_version: { type: integer, minimum: 0 }
+                idempotency_key: { type: string, minLength: 16, maxLength: 200 }
+      responses:
+        '200': { description: Recorded transition with workflow_status, lock_version, cancelled_action_item_ids, decision_changed=false and application_submitted=false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Stale state version or conflicting idempotency key }
+        '422': { description: Wrong opportunity type, invalid input or forbidden transition }
   /action-items/linked:
     get:
       operationId: listLinkedActionItems
@@ -205,6 +229,11 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [offer, company_lead, tender] }
+        - name: tender_status
+          in: query
+          required: false
+          description: Defaults to active. closed returns only closed tenders; all disables tender-state filtering.
+          schema: { type: string, enum: [active, closed, all], default: active }
       responses:
         '200':
           description: Current non-archived opportunities
@@ -885,7 +914,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 200 }
     OpportunitySummary:
       type: object
-      required: [id, opportunity_type, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, company_lead_status, project_kinds, rate, workload, assessment]
+      required: [id, opportunity_type, title, company_name, summary, validity_status, incomplete, found_at, decision, workflow_status, company_lead_status, tender_status, project_kinds, rate, workload, assessment]
       properties:
         id: { type: integer, minimum: 1 }
         opportunity_type: { type: string, enum: [offer, company_lead, tender] }
@@ -898,6 +927,7 @@ components:
         decision: { type: string, enum: [undecided, react, uninteresting] }
         workflow_status: { type: string }
         company_lead_status: { type: string, enum: [new, awaiting_approval, awaiting_response, response_received, closed] }
+        tender_status: { type: string, enum: [active, closed] }
         project_care: { type: [boolean, 'null'], description: 'Převzetí či péče o existující aplikaci; null znamená neověřeno.' }
         counterparty: { type: [string, 'null'], enum: [owner, supplier, recruiter, null] }
         project_kinds:
@@ -931,7 +961,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/OpportunitySummary'
         - type: object
-          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, company_lead, company_lead_status, company_lead_lock_version, project_kind_history, terms, technologies, versions, decision_state, current_assessment]
+          required: [original_title, translated_title, original_text, translated_text, canonical_url, source_language, acquired_at, version_count, lock_version, company_lead, company_lead_status, company_lead_lock_version, tender_status, tender_lock_version, tender_history, project_kind_history, terms, technologies, versions, decision_state, current_assessment]
           properties:
             original_title: { type: string }
             translated_title: { type: [string, 'null'] }
@@ -952,6 +982,23 @@ components:
                 context: { type: [string, 'null'] }
             company_lead_status: { type: string, enum: [new, awaiting_approval, awaiting_response, response_received, closed] }
             company_lead_lock_version: { type: integer, minimum: 0 }
+            tender_status: { type: string, enum: [active, closed] }
+            tender_lock_version: { type: integer, minimum: 0 }
+            tender_history:
+              type: array
+              description: Immutable tender status transitions, newest first.
+              items:
+                type: object
+                required: [id, event, previous_status, workflow_status, previous_lock_version, lock_version, actor_type, created_at]
+                properties:
+                  id: { type: integer, minimum: 1 }
+                  event: { type: string, enum: [closed, reopened] }
+                  previous_status: { type: string, enum: [active, closed] }
+                  workflow_status: { type: string, enum: [active, closed] }
+                  previous_lock_version: { type: integer, minimum: 0 }
+                  lock_version: { type: integer, minimum: 1 }
+                  actor_type: { type: string, enum: [user, assistant] }
+                  created_at: { type: string, format: date-time }
             project_care_history:
               type: array
               description: Nejnovější klasifikace první; vynechaný příznak při importu historii nemění.

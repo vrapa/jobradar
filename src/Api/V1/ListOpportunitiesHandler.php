@@ -29,20 +29,27 @@ final class ListOpportunitiesHandler extends BaseHandler
 
     public function params(): array
     {
-        return [new GetInputParam('opportunity_type', InputType::STRING)];
+        return [
+            new GetInputParam('opportunity_type', InputType::STRING),
+            new GetInputParam('tender_status', InputType::STRING),
+        ];
     }
 
     /** @param array<string, mixed> $params */
     public function handle(array $params): ResponseInterface
     {
         $type = $params['opportunity_type'] ?? null;
+        $tenderStatus = $params['tender_status'] ?? 'active';
         if ($type !== null && !is_string($type)) {
             return new JsonApiResponse(422, ['error' => ['code' => 'invalid_opportunity_type', 'message' => 'Typ příležitosti není platný.']]);
         }
+        if (!is_string($tenderStatus)) {
+            return new JsonApiResponse(422, ['error' => ['code' => 'invalid_tender_status', 'message' => 'Stav výběrového řízení není platný.']]);
+        }
         try {
-            $opportunities = $this->opportunities->listCurrent($this->requestContext->identity()->ownerUserId, $type);
+            $opportunities = $this->opportunities->listCurrent($this->requestContext->identity()->ownerUserId, $type, $tenderStatus);
         } catch (\InvalidArgumentException $exception) {
-            return new JsonApiResponse(422, ['error' => ['code' => 'invalid_opportunity_type', 'message' => $exception->getMessage()]]);
+            return new JsonApiResponse(422, ['error' => ['code' => 'invalid_opportunity_filter', 'message' => $exception->getMessage()]]);
         }
         $items = array_map(
             $this->transformer->transformSummary(...),

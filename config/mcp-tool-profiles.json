@@ -1,0 +1,6 @@
+{
+  "jobradar": ["list_sources", "list_sources_requiring_login", "list_opportunities", "list_reaction_queue", "get_opportunity"],
+  "jobradar-executor": ["execute"],
+  "jobradar-actions": ["list_pending_action_items", "list_linked_action_items", "link_todoist_task", "complete_action_item", "acknowledge_todoist_status"],
+  "jobradar-applications": ["list_opportunities", "list_reaction_queue", "get_opportunity", "import_opportunity_version", "list_pending_action_items", "list_linked_action_items", "record_application_event", "record_company_lead_event", "record_tender_event", "convert_opportunity_type"]
+}

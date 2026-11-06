@@ -70,6 +70,7 @@ jobs:
         run: |
           python3 -m unittest discover -s executor -p 'test_*.py'
           python3 scripts/check-mcp-lifecycle.py --idle-seconds 65
+          python3 scripts/check-mcp-tool-profiles.py
 
       - name: Lint Latte templates
         run: vendor/bin/latte-lint src/Presentation

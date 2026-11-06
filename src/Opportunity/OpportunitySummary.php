@@ -20,6 +20,7 @@ final readonly class OpportunitySummary
         public OpportunityDecision $decision,
         public string $workflowStatus,
         public string $companyLeadStatus,
+        public string $tenderStatus,
         public ?string $rateMin,
         public ?string $rateMax,
         public ?string $currency,

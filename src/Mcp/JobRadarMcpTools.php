@@ -48,9 +48,16 @@ final class JobRadarMcpTools
         return $this->call(fn (): array => $this->api->post('/search-requests/' . $requestId . '/cancel'));
     }
 
-    public function listOpportunities(?string $opportunityType = null): CallToolResult
+    public function listOpportunities(?string $opportunityType = null, string $tenderStatus = 'active'): CallToolResult
     {
-        $path = '/opportunities' . ($opportunityType === null ? '' : '?opportunity_type=' . rawurlencode($opportunityType));
+        $query = [];
+        if ($opportunityType !== null) {
+            $query['opportunity_type'] = $opportunityType;
+        }
+        if ($tenderStatus !== 'active') {
+            $query['tender_status'] = $tenderStatus;
+        }
+        $path = '/opportunities' . ($query === [] ? '' : '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986));
         return $this->call(fn (): array => $this->api->get($path));
     }
 
@@ -146,6 +153,12 @@ final class JobRadarMcpTools
     public function recordCompanyLeadEvent(int $opportunityId, array $event): CallToolResult
     {
         return $this->call(fn (): array => $this->api->post('/company-leads/events', [...$event, 'opportunity_id' => $opportunityId]));
+    }
+
+    /** @param array<string, mixed> $event */
+    public function recordTenderEvent(int $opportunityId, array $event): CallToolResult
+    {
+        return $this->call(fn (): array => $this->api->post('/tenders/events', [...$event, 'opportunity_id' => $opportunityId]));
     }
 
     /** @param array<string,mixed> $conversion */

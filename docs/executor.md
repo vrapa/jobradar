@@ -6,6 +6,10 @@ Web a MySQL uchovávají zadání, nabídky, hodnocení a skutečné výsledky z
 
 Běžné čtecí JobRadar MCP a vykonávací MCP mají různé odvolatelné tokeny. Vykonavatel dostává pouze `search:execute`, klient typu `runner`, svázaný se zařízením a vlastníkem. Nemá oprávnění vytvářet další kontroly, rozhodovat za uživatele ani odesílat žádosti.
 
+Katalogy instalovaných konektorů omezuje společný soubor `config/mcp-tool-profiles.json`. `jobradar` čte zdroje a nabídky; `jobradar-actions` nabízí jen pět operací action_itemů/Todoistu; `jobradar-applications` nabízí čtení/import nabídek a oddělené workflow žádostí, leadů a tenderů včetně čtení action_itemů. `get_search_status` vyžaduje `search:control` a není součástí těchto rolí; stav přidělené kontroly číst přes vykonavatele nebo přihlášený dashboard. `configure_mcp.py` zúží hostitelský `enabled_tools` na roli a zachová přísnější existující omezení i `disabled_tools`. Oprava registrace scoped konektoru doplní `--profile`; launcher předá `JOBRADAR_MCP_PROFILE` PHP serveru, který stejné omezení uplatní v `tools/list` i dostupných voláních. Profil není udělení oprávnění: API stále kontroluje skutečný token. Obecný PHP server bez profilu zachovává původní katalog pro samostatně spravované klienty.
+
+Při HTTP 401 nejprve ověřit roli použitého konektoru. Chyba z jiného konektoru neznamená neplatný credential, prázdnou frontu ani neúspěšný přístup k portálu. Neopakovat zápis jiným tokenem, nevydávat ani nerozšiřovat oprávnění automaticky. Pokud selže i správná čtecí operace, evidovat nedostupnost. Po opravě registrace znovu připojit MCP relace, protože běžící proces i hostitel mohou držet starý katalog.
+
 ## Nasazení
 
 1. Aplikovat migrace `008_execution.sql` a `009_executor_opt_in.sql` příkazem `php bin/jobradar database:migrate` jako webový uživatel.
@@ -19,7 +23,7 @@ Běžné čtecí JobRadar MCP a vykonávací MCP mají různé odvolatelné toke
 
 ## Odolný start a oprava registrace
 
-`python executor/configure_mcp.py` opraví startovací nastavení již registrovaných konektorů JobRadaru. Nastaví `startup_timeout_sec = 120`, `tool_timeout_sec = 60`, `required = false` a explicitní pracovní adresář projektu. Globální `mcp_optional_startup_grace_ms = 0` nechá hostitele počkat na inicializaci nepovinných MCP do jejich vlastních limitů, takže může zpomalit start i při nedostupnosti jiných konektorů. Nenastavuje JobRadar jako povinnou závislost všech chatů. Ostatní servery, prostředí, tokeny a seznamy povolených nástrojů zachová. Před atomickou změnou konfigurace vytvoří soukromou zálohu vedle původního souboru; souběžnou změnu odmítne. Opakované spuštění nic dalšího nemění.
+`python executor/configure_mcp.py` opraví startovací nastavení již registrovaných konektorů JobRadaru. Nastaví `startup_timeout_sec = 120`, `tool_timeout_sec = 60`, `required = false` a explicitní pracovní adresář projektu. Globální `mcp_optional_startup_grace_ms = 0` nechá hostitele počkat na inicializaci nepovinných MCP do jejich vlastních limitů, takže může zpomalit start i při nedostupnosti jiných konektorů. Nenastavuje JobRadar jako povinnou závislost všech chatů. Ostatní servery, prostředí a tokeny zachová; allowlist JobRadaru zúží podle role se zachováním přísnějších omezení. Před atomickou změnou konfigurace vytvoří soukromou zálohu vedle původního souboru; souběžnou změnu odmítne. Opakované spuštění nic dalšího nemění.
 
 Pro opravu registrovaného příkazu bez vydání nebo rotace credentialu použít `executor/install.ps1 -RepairRegistration`, `executor/install-actions.ps1 -RepairRegistration` nebo `executor/install-actions.ps1 -Applications -RepairRegistration`. Tento režim vyžaduje existující chráněný soubor, nevolá správní API a nevyžaduje nové OwnerId. Běžná instalace a výslovná rotace zůstávají samostatné operace. Po změně znovu připojit MCP relace; již běžící klient nepřečte nové timeouty zpětně.
 
@@ -28,6 +32,8 @@ Scoped Python launcher před předáním skutečných rour čeká na úspěšný
 Launcher a PHP zapisují do stderr pouze pevné názvy fází a uplynulé milisekundy: `launcher_started`, `credential_ready`, `runtime_wait`, `runtime_ready`, `php_spawned`, `php_started`, `autoload_ready`, `mcp_ready`; Python vykonavatel navíc `python_ready`. stdout je vyhrazen MCP. Diagnostika nesmí vypisovat obsah credentialu, prostředí, nabídky ani surové výstupy neúspěšných příkazů. Dostupný katalog sám nedokládá oprávnění číst konkrétní API; chybu scope odlišit od selhání inicializace.
 
 `python scripts/check-installed-mcp.py --rounds 10` ověří skutečné registrované scoped příkazy: inicializaci, katalog, odpovídající čtecí API a ukončení při EOF. `--idle-seconds 2100` ponechá stejné roury 35 minut otevřené bez MCP požadavků a potom zopakuje čtení. Skript nevypisuje odpovědi API, nic nepřebírá ani nezapisuje. Syntetické testy pomalého/nedostupného runtime, bezpečných chyb a opravy konfigurace běží v CI společně s krátkou kontrolou životnosti.
+
+`python scripts/check-mcp-tool-profiles.py --container <kontejner>` ověří skutečný PHP katalog tří rolí a odmítnutí cizí operace ještě v MCP. Používá syntetický token, nevolá API a ověřuje čisté ukončení STDIO.
 
 Oficiální podklad: [MCP konfigurace](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) a [plánované úkoly](https://learn.chatgpt.com/docs/automations?surface=app). Konkrétní funkčnost hostitele vždy ověřit prakticky.
 

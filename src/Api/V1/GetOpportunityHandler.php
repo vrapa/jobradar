@@ -24,6 +24,7 @@ final class GetOpportunityHandler extends BaseHandler
         private readonly \App\Application\ApplicationWorkflowService $workflow,
         private readonly \App\Action\ActionItemService $actions,
         private readonly \App\Opportunity\AttachmentReviewService $attachments,
+        private readonly \App\Tender\TenderWorkflowService $tenderWorkflow,
     ) {
         parent::__construct();
     }
@@ -53,6 +54,9 @@ final class GetOpportunityHandler extends BaseHandler
         $data['attachment_reviews'] = $this->attachments->listForOpportunity($this->requestContext->identity()->ownerUserId, $id);
         $data['application_history'] = $this->workflow->history($this->requestContext->identity()->ownerUserId, $id);
         $data['action_items'] = $this->actions->listForOpportunity($this->requestContext->identity()->ownerUserId, $id);
+        $data['tender_history'] = $opportunity->opportunityType === \App\Opportunity\OpportunityType::TENDER
+            ? $this->tenderWorkflow->history($this->requestContext->identity()->ownerUserId, $id)
+            : [];
         $assessment = $this->assessments->getCurrent($id);
         $data['current_assessment'] = $assessment === null ? null : $this->assessmentTransformer->transform($assessment);
         if ($assessment !== null) {

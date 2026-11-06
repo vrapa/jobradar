@@ -44,6 +44,14 @@ Přehled K reakci (web i MCP) zahrnuje jen `none`, `preparing`, `awaiting_approv
 
 Firemní leady používají oddělené API `POST /company-leads/events`, MCP `record_company_lead_event` a scope `company_leads:write`. Převod bez application historie obsluhuje `PUT /opportunities/{id}/type` a MCP `convert_opportunity_type`. Ani jeden nástroj nic externě neposílá; `contacted` je pouze audit již skutečně provedeného a doloženého oslovení.
 
+### Uzavírání výběrových řízení (21. 9. 2026)
+
+Migrace `022_tender_workflow.sql` zavádí pro příležitosti typu `tender` samostatný uživatelský stav `active` / `closed`, optimistický zámek a neměnnou historii `tender_events`. Chybějící stav znamená `active`, takže existující tendery zůstávají po migraci aktivní. Uzavření ani opětovné otevření nemění `opportunity_type`, zdrojové verze, přílohy, posouzení, rozhodnutí pracovní nabídky ani workflow žádosti.
+
+Uzavření atomicky zruší pouze otevřené `action_items` daného tenderu. Dokončené a dříve zrušené kroky zůstávají beze změny; vazba `external_tasks` se nemaže. `GET /action-items/linked` proto vrátí propojený zrušený krok se stavem odlišným od `synced_status` a existující synchronizace jej uzavře v Todoistu bez přímého mazání úkolu. Opětovné otevření zrušené úkoly automaticky neobnovuje.
+
+Výchozí webový a API přehled používá filtr tenderů `active`; uzavřené tendery jsou dostupné přes filtr `closed`, který vrací pouze uzavřená výběrová řízení, nebo přes `all`. Detail zobrazuje český stav a samostatný CSRF chráněný formulář. API `POST /tenders/events` a MCP `record_tender_event` vyžadují scope `tenders:write`, `expected_lock_version` a idempotency klíč. Odpověď výslovně potvrzuje `decision_changed: false` a `application_submitted: false`.
+
 Todoist synchronizace navíc čte `GET /action-items/linked`: otevřené propojené kroky a uzavřené kroky s dosud nepotvrzenou synchronizací. Pro ověřené uzavření používá `POST /action-items/synced`; jeho vstupní JSON schema přijímá jen vlastněný propojený krok a stav `open`, `completed` nebo `cancelled`. Hotový lokální krok se uzavře v Todoistu; ověřeně hotový Todoist krok se uzavře jen jako action_item. Dokončení přípravy se vybírá explicitně, nikoli odhadem podle názvu. Pracovní postup pro soukromý projekt je v `docs/application-workflow.md`.
 
 Integrace navazujících úkolů a hranice soukromých podkladů popisuje [cílové workflow](target-workflow.md). Přenos do externího správce úkolů vyžaduje souhlas vlastníka instance.
@@ -470,13 +478,13 @@ Počáteční MCP nástroje budou mapovat doménové operace, nikoli obecný SQL
 
 - `list_sources`, `list_sources_requiring_login`;
 - `request_search`, `resume_search`, `cancel_search`, `get_search_status`;
-- `list_opportunities`, `get_opportunity`, `import_opportunity_version`, `convert_opportunity_type`;
+- `list_opportunities`, `get_opportunity`, `import_opportunity_version`, `convert_opportunity_type`, `record_tender_event`;
 - `save_assessment`, `propose_decision`, `set_decision`, `set_decisions_batch`;
 - `list_reaction_queue`, `record_application_event`, `record_company_lead_event`.
 
 MCP server používá oficiální PHP SDK, standardní řádkový STDIO transport a vlastní `JOBRADAR_MCP_TOKEN`. Přes úzce vymezeného HTTP klienta volá pouze cesty `/api/v1`; nebootuje databázovou vrstvu a nevystavuje obecný HTTP ani SQL nástroj. Implementované nástroje pokrývají zdroje, řízení kontrol, nabídky, frontu k reakci, import verze, posouzení, vytvoření výslovné delegace a atomické jednotlivé i dávkové rozhodnutí. Schémata mutací vyžadují stejné idempotency klíče, ID delegace a očekávané verze jako API; popisy a anotace nástrojů výslovně uvádějí vedlejší účinky a zákaz odeslání žádosti. Odmítnutí doménové operace v API vrací MCP jako bezpečný chybový výsledek nástroje s kódem a HTTP stavem; interní odpověď API ani token se do něj nepřenášejí. Scope `decisions:delegate` je oddělený a běžnému MCP tokenu se nevydává, pokud uživatel nechce delegace vytvářet výslovným pokynem přes tento klient.
 
-Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:write`, `opportunities:read`, `opportunities:import`, `assessments:write`, `decisions:recommend`, `decisions:delegate`, `decisions:write`, `applications:write`, `company_leads:write` a `audit:read`. Runner nepotřebuje `decisions:write`; běžný rozhodovací klient nepotřebuje `decisions:delegate` a doporučovací klient nepotřebuje zápis application ani lead workflow.
+Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:write`, `opportunities:read`, `opportunities:import`, `assessments:write`, `decisions:recommend`, `decisions:delegate`, `decisions:write`, `applications:write`, `company_leads:write`, `tenders:write` a `audit:read`. Runner nepotřebuje `decisions:write`; běžný rozhodovací klient nepotřebuje `decisions:delegate` a doporučovací klient nepotřebuje zápis application, lead ani tender workflow.
 
 ## 14. Přihlášení a bezpečnost
 
@@ -690,5 +698,7 @@ Přechod rozhodnutí na `react` ve stavu `none` nebo `preparing` atomicky zajist
 Plán má nulové opportunity_id, žádný automatický termín a action_url na `/nabidky/k-reakci`. Todoist jej přenáší do sekce přípravy reakcí; deduplikuje marker i společný název a odkaz. Výběr nabídek se čte živě z JobRadaru. Dokončení plánu nemění rozhodnutí ani stav žádostí; neuzavírá se automaticky při odeslání jedné nabídky.
 
 ### Odolnost připojení MCP
+
+Konektory mají explicitní katalogy rolí v `config/mcp-tool-profiles.json`: čtení zdrojů/nabídek, vykonavatel, Todoist action_itemy a workflow žádostí/leadů/tenderů. Registrace zužuje hostitelský allowlist se zachováním přísnějších omezení; scoped launcher předává profil také PHP serveru, aby nepodporované operace nebyly nabízené ani volatelné. API autorizace a tokeny se nemění. Staré relace vyžadují nové připojení. Pokyny směrují operace podle role a odlišují HTTP 401 chybného konektoru od skutečně nedostupného API; stav kontroly vyžadující `search:control` se nenabízí běžnému čtecímu klientovi.
 
 Životnost transportu se řídí EOF, nikoli nečinností. Lokální registrace nastavuje samostatný startovací limit 120 sekund, limit volání 60 sekund a čekání hostitele na katalog nepovinných MCP. Oprava existující registrace je idempotentní a oddělená od vydání či rotace tokenu; zachovává vlastníka, scopes a nesouvisející konfiguraci. Scoped launcher před spuštěním PHP provede pouze omezený read-only preflight Docker/PHP (90 sekund celkem, nejvýše 5 sekund na pokus). Jakmile předá skutečné STDIO, nesmí automaticky opakovat požadavky ani zápisy. Pevné fáze a časování startu jdou do stderr bez tajemství a provozního obsahu; stdout zůstává pouze pro MCP. Přijímací kontroly zahrnují opakované nové připojení, čtení oprávněného API, 35 minut skutečné nečinnosti a korektní EOF. Podrobný postup je v [dokumentaci vykonavatele](executor.md#odolný-start-a-oprava-registrace).

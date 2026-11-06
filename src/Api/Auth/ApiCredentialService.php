@@ -25,6 +25,7 @@ final class ApiCredentialService
         'decisions:write',
         'applications:write',
         'company_leads:write',
+        'tenders:write',
         'action_items:read',
         'action_items:write',
         'audit:read',

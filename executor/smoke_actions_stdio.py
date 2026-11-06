@@ -50,8 +50,13 @@ finally:
 assert process.returncode == 0, 'Configured action MCP process failed'
 assert [reply['id'] for reply in replies] == [1, 2, 3], 'Incomplete stdio exchange'
 tool_names = {tool['name'] for tool in replies[1]['result']['tools']}
-assert {'list_pending_action_items', 'link_todoist_task', 'complete_action_item'} <= tool_names
-assert {'record_application_event', 'list_linked_action_items', 'acknowledge_todoist_status'} <= tool_names
+assert 'list_pending_action_items' in tool_names
+if options.applications:
+    assert {'record_application_event', 'list_linked_action_items', 'get_opportunity'} <= tool_names
+    assert 'complete_action_item' not in tool_names
+else:
+    assert {'link_todoist_task', 'complete_action_item', 'list_linked_action_items', 'acknowledge_todoist_status'} <= tool_names
+    assert {'record_application_event', 'list_sources', 'list_opportunities'}.isdisjoint(tool_names)
 assert not replies[2]['result'].get('isError'), 'Action item API read failed'
 assert replies[2]['result']['structuredContent']['meta']['count'] >= 0
 print('Configured action MCP: initialize, tools/list and read-only pending-action probe passed; no Todoist task was created.')

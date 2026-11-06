@@ -9,6 +9,15 @@ Read the available computer-use skill before operating Chrome. Use the Chrome in
 
 ## Acquire and scope
 
+### Choose the connector by operation
+
+- `jobradar`: read sources, access metadata and opportunities.
+- `jobradar-executor.execute`: claim, task, verify and all writes belonging to an assigned source check. Read request progress from its status/task or the authenticated dashboard; the read connector does not have `search:control`.
+- `jobradar-actions`: only pending/linked action items and Todoist reconciliation. Never use it for sources, opportunities or search requests.
+- `jobradar-applications`: opportunity reads/imports and the separate application, company-lead and tender workflow. It is not the executor or Todoist write connector.
+
+Tool visibility is not proof of token scope in an older session. On HTTP 401, verify connector routing first. A failure from the wrong connector says nothing about the queue, source access or credential validity. Use the designated connector for the needed operation; do not retry a denied write through another identity, rotate tokens or broaden scopes automatically. If the designated connector also fails, report unavailable access, not an empty result. After connector profile changes reconnect MCP sessions to refresh their catalog.
+
 1. Call `status`. On unavailable API/MCP/Chrome, report only the proven cause. Do not claim a source was checked.
 2. Call `claim` once. Null lease means silent end: do not navigate portals, create requests or choose new sources. At most one request per wake. MCP holds the secret lease internally and renews each minute, for at most ten minutes without tool activity and one hour total. The DB refuses simultaneous leases on the device.
 3. Call `task`. If `prepare_access` is true, follow [access-preparation.md](access-preparation.md) and end this wake after preparing access; do not start source checks. Otherwise use only its assigned sources, search definitions, limits, pinned candidate profile and rules. Missing definition/profile/rules is `configuration_required`, never an invitation to invent preferences: start the affected source with scope “Configuration check only, no portal traversal”, finish `error` with that code, a precise reason and null unknown counts, and do not open that portal. Do not act on pre-migration queued work without confirmation. Keep completed sources untouched.

@@ -42,6 +42,8 @@ final readonly class OpportunityDetail
         public ?array $companyLead,
         public string $companyLeadStatus,
         public int $companyLeadLockVersion,
+        public string $tenderStatus,
+        public int $tenderLockVersion,
         public array $projectCareHistory = [],
         public array $discoveries = [],
         public array $counterpartyHistory = [],

@@ -1,3 +1,7 @@
+UPDATE opportunities
+SET opportunity_type = 'offer'
+WHERE opportunity_type NOT IN ('offer', 'company_lead', 'tender');
+
 ALTER TABLE opportunities
     MODIFY opportunity_type VARCHAR(32) NOT NULL DEFAULT 'offer',
     ADD CONSTRAINT opportunities_type_valid CHECK (opportunity_type IN ('offer', 'company_lead', 'tender'));

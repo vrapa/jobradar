@@ -28,7 +28,9 @@ final class HomePresenter extends SecuredPresenter
     {
         $type = (string) ($this->getParameter('type') ?? 'all');
         if (!in_array($type, ['all', ...array_keys(\App\Opportunity\OpportunityType::LABELS)], true)) { $type = 'all'; }
-        $items = $this->opportunities->listCurrent((int) $this->getUser()->getId(), $type === 'all' ? null : $type);
+        $tenderStatus = (string) ($this->getParameter('tender') ?? 'active');
+        if (!in_array($tenderStatus, ['active', 'closed', 'all'], true)) { $tenderStatus = 'active'; }
+        $items = $this->opportunities->listCurrent((int) $this->getUser()->getId(), $type === 'all' ? null : $type, $tenderStatus);
         if ($this->getParameter('decision') === 'undecided') {
             $items = array_values(array_filter($items, static fn ($item): bool => $item->decision === OpportunityDecision::Undecided));
         }
@@ -53,6 +55,7 @@ final class HomePresenter extends SecuredPresenter
             'party' => $party,
             'kind' => $kind,
             'type' => $type,
+            'tenderStatus' => $tenderStatus,
             'coverage' => $this->sourceQueries->latestCoverageSummary((int) $this->getUser()->getId()),
             'unresolvedSources' => $this->sourceQueries->unresolvedSources((int) $this->getUser()->getId()),
             'executor' => $this->sourceQueries->executorStatus((int) $this->getUser()->getId()),

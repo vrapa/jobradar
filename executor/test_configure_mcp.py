@@ -35,6 +35,7 @@ startup_timeout_sec = 7
         self.assertEqual(['keep'], data['jobradar']['args'])
         self.assertEqual(str(Path('/python')), data['jobradar-applications']['command'])
         self.assertIn(str(Path('/protected.xml')), data['jobradar-applications']['args'])
+        self.assertEqual(['--profile', 'jobradar-applications'], data['jobradar-applications']['args'][-2:])
         self.assertFalse(data['jobradar-applications']['required'])
 
     def test_backup_and_idempotent_repair(self):
@@ -47,6 +48,22 @@ startup_timeout_sec = 7
             backups = list(Path(directory).glob('*.before-jobradar-*'))
             self.assertEqual(1, len(backups))
             self.assertEqual(original, backups[0].read_text(encoding='utf-8'))
+
+    def test_profiles_remove_unusable_tools_and_preserve_stricter_restrictions(self):
+        source = '''[mcp_servers.jobradar]
+enabled_tools = ["list_sources", "get_search_status"]
+[mcp_servers.jobradar-actions]
+disabled_tools = ["complete_action_item"]
+[mcp_servers.jobradar-applications]
+enabled_tools = ["get_opportunity"]
+'''
+        data = tomllib.loads(configure_text(source, root=Path('/synthetic')))['mcp_servers']
+        self.assertEqual(['list_sources'], data['jobradar']['enabled_tools'])
+        self.assertNotIn('list_sources', data['jobradar-actions']['enabled_tools'])
+        self.assertNotIn('record_application_event', data['jobradar-actions']['enabled_tools'])
+        self.assertIn('list_pending_action_items', data['jobradar-actions']['enabled_tools'])
+        self.assertEqual(['complete_action_item'], data['jobradar-actions']['disabled_tools'])
+        self.assertEqual(['get_opportunity'], data['jobradar-applications']['enabled_tools'])
 
 
 if __name__ == '__main__':

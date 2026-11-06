@@ -12,6 +12,7 @@ import tomllib
 
 
 SERVERS = ('jobradar', 'jobradar-executor', 'jobradar-actions', 'jobradar-applications')
+TOOL_PROFILES = json.loads((Path(__file__).resolve().parents[1] / 'config' / 'mcp-tool-profiles.json').read_text(encoding='utf-8'))
 
 
 def set_fields(section, fields):
@@ -36,10 +37,15 @@ def configure_text(source, *, root, server=None, command=None, credential=None, 
         entry = 'stdio.py' if server == 'jobradar-executor' else 'actions_stdio.py'
         arguments = [str(root / 'executor' / entry), '--credential-file', str(credential)]
         if server != 'jobradar-executor':
-            arguments += ['--container', container]
+            arguments += ['--container', container, '--profile', server]
         fields[server] = {'command': str(command), 'args': arguments,
                           'startup_timeout_sec': 120, 'tool_timeout_sec': 60,
                           'required': False, 'cwd': str(root)}
+    for name, values in fields.items():
+        existing = before.get('mcp_servers', {}).get(name, {}).get('enabled_tools')
+        # Narrow to the connector role, preserving any stricter operator allowlist.
+        values['enabled_tools'] = [tool for tool in TOOL_PROFILES[name]
+                                   if existing is None or tool in existing]
     # Only the root table and exact server tables are changed; nested env/tool tables survive.
     sections = re.split(r'(?m)(?=^\[)', source)
     sections[0] = set_fields(sections[0], {'mcp_optional_startup_grace_ms': 0})

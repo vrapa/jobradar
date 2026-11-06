@@ -15,6 +15,7 @@
 <form method="get" class="d-flex flex-wrap gap-2 align-items-center mb-3">
     <input n:if="$onlyUndecided" type="hidden" name="decision" value="undecided">
     <label for="type">Typ příležitosti</label><select id="type" name="type" class="form-select w-auto"><option value="all" selected={$type === 'all'}>Všechny</option><option n:foreach="App\Opportunity\OpportunityType::LABELS as $key => $label" value="{$key}" selected={$type === $key}>{$label}</option></select>
+    <label for="tender">Stav výběrového řízení</label><select id="tender" name="tender" class="form-select w-auto"><option value="active" selected={$tenderStatus === 'active'}>Aktivní</option><option value="closed" selected={$tenderStatus === 'closed'}>Uzavřené</option><option value="all" selected={$tenderStatus === 'all'}>Všechny</option></select>
     <label for="care">Převzetí / péče o existující aplikaci</label>
     <select id="care" name="care" class="form-select w-auto"><option value="all" selected={$care === 'all'}>Vše</option><option value="yes" selected={$care === 'yes'}>Ano</option><option value="no" selected={$care === 'no'}>Ne</option><option value="unknown" selected={$care === 'unknown'}>Neověřeno</option></select>
     <label for="party">Protistrana</label><select id="party" name="party" class="form-select w-auto"><option value="all" selected={$party === 'all'}>Všechny</option><option value="unknown" selected={$party === 'unknown'}>Neověřeno</option><option n:foreach="App\Opportunity\CounterpartyInput::LABELS as $key => $label" value="{$key}" selected={$party === $key}>{$label}</option></select>
@@ -94,6 +95,7 @@
                     <span n:foreach="$opportunity->projectKinds ?? [] as $projectKind" class="badge text-bg-secondary">{App\Opportunity\ProjectKindInput::LABELS[$projectKind]}</span>
                     <span n:if="$opportunity->decision->value === 'react'" class="badge text-bg-success">{if in_array($opportunity->workflowStatus, ['none', 'preparing', 'awaiting_approval'], true)}K reakci{else}{=App\Application\ApplicationWorkflowService::LABELS[$opportunity->workflowStatus] ?? $opportunity->workflowStatus}{/if}</span>
                     <span n:if="$opportunity->opportunityType === 'company_lead'" class="badge text-bg-success">{App\CompanyLead\CompanyLeadWorkflowService::LABELS[$opportunity->companyLeadStatus]}</span>
+                    <span n:if="$opportunity->opportunityType === 'tender' && $opportunity->tenderStatus === 'closed'" class="badge text-bg-secondary">Uzavřeno</span>
                 </div>
                 <h2 class="h5"><a n:href="Opportunity:detail $opportunity->id" class="stretched-link text-decoration-none">{$opportunity->title}</a></h2>
                 <p class="text-body-secondary mb-3">{$opportunity->companyName ?? 'Společnost neuvedena'}</p>

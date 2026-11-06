@@ -231,9 +231,9 @@ final class ActionItemService
         });
     }
 
-    public function cancel(int $userId, int $actionItemId): void
+    public function cancel(int $userId, int $actionItemId, string $origin = 'user'): void
     {
-        $this->changeStatus($userId, $actionItemId, 'cancelled', 'user');
+        $this->changeStatus($userId, $actionItemId, 'cancelled', $origin);
     }
 
     private function changeStatus(int $userId, int $actionItemId, string $status, string $origin): void

@@ -16,12 +16,13 @@ final class OpportunityQueryService
     }
 
     /** @return list<OpportunitySummary> */
-    public function listCurrent(?int $userId = null, ?string $opportunityType = null): array
+    public function listCurrent(?int $userId = null, ?string $opportunityType = null, string $tenderStatus = 'active'): array
     {
         if ($opportunityType !== null) {
             OpportunityType::validate($opportunityType);
         }
-        return $this->listByDecisionVisibility($userId, false, false, $opportunityType);
+        self::validateTenderStatusFilter($tenderStatus);
+        return $this->listByDecisionVisibility($userId, false, false, $opportunityType, $tenderStatus);
     }
 
     /** @return list<OpportunitySummary> */
@@ -45,8 +46,9 @@ final class OpportunityQueryService
     }
 
     /** @return list<OpportunitySummary> */
-    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting, bool $onlyReactionQueue = false, ?string $opportunityType = null): array
+    private function listByDecisionVisibility(?int $userId, bool $onlyUninteresting, bool $onlyReactionQueue = false, ?string $opportunityType = null, string $tenderStatus = 'active'): array
     {
+        self::validateTenderStatusFilter($tenderStatus);
         $rows = $this->database->fetchAll(
             'SELECT o.id, o.opportunity_type, o.validity_status, o.found_at, c.name AS company_name,
                     (SELECT pc.value FROM opportunity_project_care pc WHERE pc.opportunity_id = o.id ORDER BY pc.id DESC LIMIT 1) AS project_care,
@@ -57,7 +59,8 @@ final class OpportunityQueryService
                     terms.workload_min, terms.workload_max, terms.workload_unit,
                     assessment.score_min, assessment.score_max, assessment.coverage, assessment.recommendation,
                     COALESCE(state.decision, ?) AS decision, COALESCE(state.workflow_status, ?) AS workflow_status,
-                    COALESCE(lead_state.workflow_status, ?) AS company_lead_status
+                    COALESCE(lead_state.workflow_status, ?) AS company_lead_status,
+                    COALESCE(tender_state.workflow_status, ?) AS tender_status
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
              LEFT JOIN companies c ON c.id = o.company_id
@@ -65,8 +68,14 @@ final class OpportunityQueryService
              LEFT JOIN assessments assessment ON assessment.opportunity_id = o.id AND assessment.superseded_at IS NULL
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
              LEFT JOIN company_lead_states lead_state ON lead_state.opportunity_id = o.id AND lead_state.user_id = ?
+             LEFT JOIN tender_states tender_state ON tender_state.opportunity_id = o.id AND tender_state.user_id = ?
              WHERE o.archived_at IS NULL
                AND (? IS NULL OR o.opportunity_type = ?)
+               AND (
+                    ? = ?
+                    OR (? = ? AND o.opportunity_type = ? AND COALESCE(tender_state.workflow_status, ?) = ?)
+                    OR (? = ? AND (o.opportunity_type <> ? OR COALESCE(tender_state.workflow_status, ?) = ?))
+               )
                AND (
                     (? = 1 AND o.opportunity_type = ? AND state.decision = ?)
                     OR (? = 0 AND ? = 1 AND o.opportunity_type = ? AND state.decision = ?)
@@ -76,10 +85,24 @@ final class OpportunityQueryService
             OpportunityDecision::Undecided->value,
             'none',
             'new',
+            'active',
+            $userId,
             $userId,
             $userId,
             $opportunityType,
             $opportunityType,
+            $tenderStatus,
+            'all',
+            $tenderStatus,
+            'closed',
+            OpportunityType::TENDER,
+            'active',
+            'closed',
+            $tenderStatus,
+            'active',
+            OpportunityType::TENDER,
+            'active',
+            'active',
             $onlyUninteresting,
             OpportunityType::OFFER,
             OpportunityDecision::Uninteresting->value,
@@ -109,6 +132,7 @@ final class OpportunityQueryService
                     : OpportunityDecision::Undecided,
                 workflowStatus: (string) $row['opportunity_type'] === OpportunityType::OFFER ? (string) $row['workflow_status'] : 'none',
                 companyLeadStatus: (string) $row['company_lead_status'],
+                tenderStatus: (string) $row['tender_status'],
                 rateMin: self::nullableDecimal($row['rate_min']),
                 rateMax: self::nullableDecimal($row['rate_max']),
                 currency: self::nullableString($row['currency']),
@@ -138,6 +162,7 @@ final class OpportunityQueryService
                     COALESCE(state.workflow_status, ?) AS workflow_status, COALESCE(state.lock_version, 0) AS state_lock_version,
                     lead_details.contact_name, lead_details.contact_role, lead_details.channel AS lead_channel, lead_details.profile_url, lead_details.outreach_context,
                     COALESCE(lead_state.workflow_status, ?) AS company_lead_status, COALESCE(lead_state.lock_version, 0) AS company_lead_lock_version,
+                    COALESCE(tender_state.workflow_status, ?) AS tender_status, COALESCE(tender_state.lock_version, 0) AS tender_lock_version,
                     (SELECT COUNT(*) FROM source_versions versions WHERE versions.opportunity_id = o.id) AS version_count
              FROM opportunities o
              INNER JOIN source_versions v ON v.id = o.current_source_version_id
@@ -145,10 +170,13 @@ final class OpportunityQueryService
              LEFT JOIN user_opportunity_state state ON state.opportunity_id = o.id AND state.user_id = ?
              LEFT JOIN company_lead_details lead_details ON lead_details.opportunity_id = o.id
              LEFT JOIN company_lead_states lead_state ON lead_state.opportunity_id = o.id AND lead_state.user_id = ?
+             LEFT JOIN tender_states tender_state ON tender_state.opportunity_id = o.id AND tender_state.user_id = ?
              WHERE o.id = ? AND o.archived_at IS NULL',
             OpportunityDecision::Undecided->value,
             'none',
             'new',
+            'active',
+            $userId,
             $userId,
             $userId,
             $id,
@@ -206,7 +234,16 @@ final class OpportunityQueryService
             ] : null,
             companyLeadStatus: (string) $row['company_lead_status'],
             companyLeadLockVersion: (int) $row['company_lead_lock_version'],
+            tenderStatus: (string) $row['tender_status'],
+            tenderLockVersion: (int) $row['tender_lock_version'],
         );
+    }
+
+    private static function validateTenderStatusFilter(string $status): void
+    {
+        if (!in_array($status, ['active', 'closed', 'all'], true)) {
+            throw new \InvalidArgumentException('Stav výběrového řízení není platný.');
+        }
     }
 
     private function loadTerms(int $versionId): ?OpportunityTermsView

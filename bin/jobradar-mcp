@@ -28,7 +28,13 @@ $token = getenv('JOBRADAR_MCP_TOKEN') ?: '';
 
 try {
     $api = new JobRadarMcpApiClient($apiUrl, $token, new CurlRunnerHttpClient());
-    $server = (new JobRadarMcpServerFactory())->create(new JobRadarMcpTools($api));
+    $profile = getenv('JOBRADAR_MCP_PROFILE') ?: null;
+    $allowedTools = null;
+    if ($profile !== null) {
+        $profiles = json_decode(file_get_contents($rootDirectory . '/config/mcp-tool-profiles.json'), true, flags: JSON_THROW_ON_ERROR);
+        $allowedTools = $profiles[$profile] ?? throw new InvalidArgumentException('Unknown MCP tool profile.');
+    }
+    $server = (new JobRadarMcpServerFactory())->create(new JobRadarMcpTools($api), $allowedTools);
     $startupLog('mcp_ready');
     exit($server->run(new StdioTransport()));
 } catch (Throwable $exception) {
