@@ -70,15 +70,16 @@
 </section>
 </div>
 
-<div class="d-flex gap-2 align-items-center mb-3">
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
     <span class="badge text-bg-primary rounded-pill">{$opportunityCount}</span>
-    <span class="text-body-secondary">uložených příležitostí</span>
+    <span class="text-body-secondary">zobrazených příležitostí</span>
+    <a n:href="Home:uninteresting" class="btn btn-sm btn-outline-secondary ms-auto">Nezajímavé nabídky</a>
 </div>
 
 <div n:if="$opportunityCount === 0" class="card shadow-sm">
     <div class="card-body py-5 text-center">
-        <h2 class="h4">Zatím tu nic není</h2>
-        <p class="text-body-secondary">Začněte ručním importem první příležitosti.</p>
+        <h2 class="h4">Žádné příležitosti k zobrazení</h2>
+        <p class="text-body-secondary">Zkuste změnit filtry. Skryté nabídky najdete v seznamu Nezajímavé nabídky.</p>
         <a n:href="OpportunityImport:" class="btn btn-primary">Importovat příležitost</a>
     </div>
 </div>
@@ -134,7 +135,7 @@
                         <select n:name="reason" class="form-select form-select-sm" aria-label="Důvod nezájmu"></select>
                         <div class="btn-group btn-group-sm flex-shrink-0" role="group" aria-label="Rychlé rozhodnutí">
                             <button n:if="$opportunity->decision->value !== 'react'" n:name="react" class="btn btn-outline-success">Reagovat</button>
-                            <button n:if="$opportunity->decision->value !== 'uninteresting'" n:name="uninteresting" class="btn btn-outline-secondary">Nezajímavé</button>
+                            <button n:name="uninteresting" class="btn btn-outline-secondary">Nezajímavé</button>
                             <button n:if="$opportunity->decision->value !== 'undecided'" n:name="undo" class="btn btn-outline-primary">Zpět</button>
                         </div>
                     </div>

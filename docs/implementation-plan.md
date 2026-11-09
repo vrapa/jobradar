@@ -123,7 +123,7 @@ První verze nebude sama bez pokynu pravidelně hledat. Uživatel vždy vytvoř�
 - ukládat hesla, cookies, MFA kódy nebo obsah správce hesel pracovních portálů;
 - označit plánovaný zdroj jako zkontrolovaný bez skutečného průchodu.
 
-`Reagovat` znamená pouze zařazení do interní fronty. `Nezajímavé` nabídku skryje z výchozího přehledu, ale nesmaže ji a lze je vrátit zpět.
+`Reagovat` znamená pouze zařazení do interní fronty. Uložené rozhodnutí `Nezajímavé` nabídku skryje z výchozího přehledu a zachová její historii. Přehled odkazuje na seznam `Nezajímavé nabídky`, odkud ji lze přímo vrátit mezi nerozhodnuté.
 
 ## 3. Profil a hodnoticí pravidla
 
@@ -491,6 +491,7 @@ Scopes se oddělí minimálně na `sources:read`, `search:control`, `search:writ
 - Produkce pouze přes HTTPS; secure, HttpOnly a SameSite cookies.
 - Hesla uživatelů přes `password_hash()` s aktuálním bezpečným algoritmem; ochrana proti hrubé síle a regenerace session ID.
 - CSRF tokeny pro webové mutace, parametrizované SQL, výstupní escapování a přísná sanitizace externího obsahu.
+- Přihlašovací stránka otevře relaci pro CSRF token před vykreslením formuláře, i při první návštěvě bez cookie.
 - Content Security Policy, `X-Content-Type-Options`, vhodný `Referrer-Policy` a zákaz indexace.
 - API token zobrazit jen při vytvoření, ukládat jen hash a krátký prefix; samostatná expirace, scopes a odvolání.
 - API klienti typu runner, MCP a obecná integrace mají vlastní veřejný identifikátor a oddělené tokeny. Vydaný token má prefix `jr_`, jeho plná hodnota se vrací pouze při vytvoření a autentizace odmítá expirovaný či odvolaný token, odvolaného klienta i chybějící scope.

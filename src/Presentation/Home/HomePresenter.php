@@ -100,7 +100,6 @@ final class HomePresenter extends SecuredPresenter
             $form = new Form();
             $form->addHidden('lockVersion', (string) $opportunity->decisionState->lockVersion);
             $form->addSelect('reason', 'Důvod nezájmu', [
-                '' => 'Důvod nezájmu…',
                 'low_rate' => 'Nízká sazba',
                 'workload' => 'Nevhodný rozsah',
                 'not_remote' => 'Nelze remote z ČR',
@@ -110,7 +109,7 @@ final class HomePresenter extends SecuredPresenter
                 'expired' => 'Neaktuální nabídka',
                 'duplicate' => 'Duplicita',
                 'other' => 'Jiný důvod',
-            ])->setDefaultValue($opportunity->decisionState->reason ?? '');
+            ])->setPrompt('Důvod nezájmu…')->setDefaultValue($opportunity->decisionState->reason);
             $form->addProtection('Platnost rychlého rozhodnutí vypršela. Obnovte stránku.');
             $form->addSubmit('react', 'Reagovat');
             $form->addSubmit('uninteresting', 'Nezajímavé');
@@ -127,12 +126,20 @@ final class HomePresenter extends SecuredPresenter
     {
         $react = $form['react'];
         $uninteresting = $form['uninteresting'];
-        if (!$react instanceof SubmitButton || !$uninteresting instanceof SubmitButton) {
+        $undo = $form['undo'];
+        if (!$react instanceof SubmitButton || !$uninteresting instanceof SubmitButton || !$undo instanceof SubmitButton) {
             throw new \LogicException('Formulář rychlého rozhodnutí není správně sestaven.');
         }
-        $decision = $react->isSubmittedBy()
-            ? OpportunityDecision::React
-            : ($uninteresting->isSubmittedBy() ? OpportunityDecision::Uninteresting : OpportunityDecision::Undecided);
+        $decision = match (true) {
+            $react->isSubmittedBy() => OpportunityDecision::React,
+            $uninteresting->isSubmittedBy() => OpportunityDecision::Uninteresting,
+            $undo->isSubmittedBy() => OpportunityDecision::Undecided,
+            default => null,
+        };
+        if ($decision === null) {
+            $form->addError('Vyberte akci pro nabídku.');
+            return;
+        }
         try {
             $result = $this->decisions->setManualDecision(
                 (int) $this->getUser()->getId(),
@@ -148,7 +155,12 @@ final class HomePresenter extends SecuredPresenter
             $form->addError($exception->getMessage());
             return;
         }
-        $this->flashMessage($result->changed ? 'Rozhodnutí bylo uloženo.' : 'Rozhodnutí už bylo aktuální.', 'success');
+        $message = !$result->changed ? 'Rozhodnutí už bylo aktuální.' : match ($decision) {
+            OpportunityDecision::Uninteresting => 'Nabídka byla skryta z přehledu. Najdete ji v seznamu Nezajímavé.',
+            OpportunityDecision::Undecided => 'Nabídka byla vrácena mezi nerozhodnuté.',
+            OpportunityDecision::React => 'Rozhodnutí bylo uloženo.',
+        };
+        $this->flashMessage($message, 'success');
         $this->redirect('this');
     }
 }

@@ -20,6 +20,8 @@ final class SignPresenter extends BasePresenter
         if ($this->getUser()->isLoggedIn()) {
             $this->redirect('Home:');
         }
+        // The login form needs a session for its CSRF token before HTML is sent.
+        $this->getSession()->start();
     }
 
     protected function createComponentSignInForm(): Form
