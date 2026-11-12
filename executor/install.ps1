@@ -1,10 +1,12 @@
 param([string]$Container = 'JobRadar-web', [int]$OwnerId = 0, [switch]$ReplaceRevokedCredential, [switch]$RepairRegistration)
 $ErrorActionPreference = 'Stop'
-$credentialDirectory = Join-Path $env:LOCALAPPDATA 'JobRadar'
-$credentialPath = Join-Path $credentialDirectory 'executor-token.xml'
+. (Join-Path $PSScriptRoot 'credential-store.ps1')
 $pythonCommand = Get-Command python -CommandType Application -All | Where-Object { $_.Source -notlike '*\WindowsApps\python.exe' } | Select-Object -First 1
 if (!$pythonCommand) { throw 'A real Python executable was not found; the Windows Store alias is not sufficient.' }
 $pythonExe = $pythonCommand.Source
+$credentialPath = & $pythonExe (Join-Path $PSScriptRoot 'credentials.py') --storage-path executor-token.xml
+if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the protected credential location.' }
+$credentialDirectory = Split-Path -Parent $credentialPath
 if ($RepairRegistration) {
     if ($ReplaceRevokedCredential) { throw 'Registration repair cannot replace credentials.' }
     & $pythonExe (Join-Path $PSScriptRoot 'configure_mcp.py') --server jobradar-executor --credential-file $credentialPath
@@ -14,7 +16,7 @@ if ($RepairRegistration) {
 if (Test-Path -LiteralPath $credentialPath) {
     if (!$ReplaceRevokedCredential) { throw 'Executor credential already exists; use the existing installation.' }
     $resolvedCredential = (Resolve-Path -LiteralPath $credentialPath).Path
-    $expectedCredential = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'JobRadar/executor-token.xml'))
+    $expectedCredential = [IO.Path]::GetFullPath((Join-Path $credentialDirectory 'executor-token.xml'))
     if ($resolvedCredential -ne $expectedCredential) { throw 'Unexpected credential path.' }
     Move-Item -LiteralPath $resolvedCredential -Destination ($resolvedCredential + '.revoked-' + [DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))
 }
@@ -25,7 +27,7 @@ $registrationText = & docker exec -u www-data -e JOBRADAR_MCP_TOKEN @ownerArgume
 if ($LASTEXITCODE -ne 0) { throw 'Executor registration failed.' }
 $registration = $registrationText | ConvertFrom-Json
 try {
-    New-Item -ItemType Directory -Force -Path $credentialDirectory | Out-Null
+    Protect-JobRadarCredentialDirectory $credentialDirectory
     $registration.token | ConvertTo-SecureString -AsPlainText -Force | Export-Clixml -LiteralPath $credentialPath
     & $pythonExe (Join-Path $PSScriptRoot 'configure_mcp.py') --server jobradar-executor --credential-file $credentialPath
     if ($LASTEXITCODE -ne 0) { throw 'MCP registration failed.' }

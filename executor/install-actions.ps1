@@ -1,13 +1,15 @@
 param([string]$Container = 'JobRadar-web', [int]$OwnerId = 0, [switch]$ReplaceRevokedCredential, [switch]$RotateCredential, [switch]$Applications, [switch]$RepairRegistration)
 $ErrorActionPreference = 'Stop'
-$credentialDirectory = Join-Path $env:LOCALAPPDATA 'JobRadar'
+. (Join-Path $PSScriptRoot 'credential-store.ps1')
 $credentialName = if ($Applications) { 'application-workflow-token.xml' } else { 'action-sync-token.xml' }
 $serverName = if ($Applications) { 'jobradar-applications' } else { 'jobradar-actions' }
 $applicationMode = if ($Applications) { '1' } else { '0' }
-$credentialPath = Join-Path $credentialDirectory $credentialName
 $pythonCommand = Get-Command python -CommandType Application -All | Where-Object { $_.Source -notlike '*\WindowsApps\python.exe' } | Select-Object -First 1
 if (!$pythonCommand) { throw 'A real Python executable was not found; the Windows Store alias is not sufficient.' }
 $pythonExe = $pythonCommand.Source
+$credentialPath = & $pythonExe (Join-Path $PSScriptRoot 'credentials.py') --storage-path $credentialName
+if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the protected credential location.' }
+$credentialDirectory = Split-Path -Parent $credentialPath
 if ($RepairRegistration) {
     if ($RotateCredential -or $ReplaceRevokedCredential) { throw 'Registration repair cannot rotate credentials.' }
     & $pythonExe (Join-Path $PSScriptRoot 'configure_mcp.py') --server $serverName --credential-file $credentialPath --container $Container
@@ -32,7 +34,7 @@ $registrationLine = @($registrationText) | Where-Object { $_ -match '^\s*\{.*\}\
 if (!$registrationLine) { throw 'Action sync registration did not return its JSON result.' }
 $registration = $registrationLine | ConvertFrom-Json
 try {
-    New-Item -ItemType Directory -Force -Path $credentialDirectory | Out-Null
+    Protect-JobRadarCredentialDirectory $credentialDirectory
     $registration.token | ConvertTo-SecureString -AsPlainText -Force | Export-Clixml -LiteralPath $credentialPath
     & $pythonExe (Join-Path $PSScriptRoot 'configure_mcp.py') --server $serverName --credential-file $credentialPath --container $Container
     if ($LASTEXITCODE -ne 0) { throw 'MCP registration failed.' }

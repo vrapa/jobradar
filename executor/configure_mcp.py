@@ -9,6 +9,7 @@ import shutil
 import sys
 import tempfile
 import tomllib
+from credentials import resolve_credential
 
 
 SERVERS = ('jobradar', 'jobradar-executor', 'jobradar-actions', 'jobradar-applications')
@@ -101,8 +102,11 @@ def main():
     parser.add_argument('--credential-file', type=Path)
     parser.add_argument('--container', default='JobRadar-web')
     options = parser.parse_args()
-    if options.server and (options.credential_file is None or not options.credential_file.is_file()):
-        parser.error('Repair requires an existing protected credential file.')
+    if options.server:
+        try:
+            options.credential_file = resolve_credential(options.credential_file)
+        except (OSError, ValueError, TypeError):
+            parser.error('Repair requires an existing unambiguous protected credential file.')
     try:
         changed = repair(options.config, root=Path(__file__).resolve().parents[1],
                          server=options.server, command=Path(sys.executable),

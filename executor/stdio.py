@@ -16,6 +16,9 @@ if __name__ == '__main__':
     log.emit('launcher_started')
     try:
         os.environ['JOBRADAR_EXECUTOR_TOKEN'] = decrypt_credential(args.credential_file)
+    except FileNotFoundError:
+        print('JobRadar: protected credential file is missing; run executor/repair-mcp.ps1 to repair its registration.', file=sys.stderr)
+        sys.exit(1)
     except Exception:
         # Never emit XML, encrypted/plain token, or exception context.
         print('JobRadar: unable to load the Windows-protected executor credential.', file=sys.stderr)

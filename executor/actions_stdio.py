@@ -18,6 +18,9 @@ if __name__ == '__main__':
     log.emit('launcher_started')
     try:
         token = decrypt_credential(args.credential_file)
+    except FileNotFoundError:
+        print('JobRadar: protected credential file is missing; run executor/repair-mcp.ps1 to repair its registration.', file=sys.stderr)
+        sys.exit(1)
     except Exception:
         print('JobRadar: unable to load the Windows-protected action sync credential.', file=sys.stderr)
         sys.exit(1)
